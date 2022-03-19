@@ -83,7 +83,7 @@ impl MainState {
             .collect();
 
         let mut skyimg = graphics::Image::new(ctx, "/sky3.png")?;
-        skyimg.set_wrap(graphics::WrapMode::Tile, graphics::WrapMode::Tile);
+        skyimg.set_wrap(graphics::WrapMode::Tile, graphics::WrapMode::Mirror);
         skyimg.set_filter(graphics::FilterMode::Nearest);
         let mut sky = graphics::spritebatch::SpriteBatch::new(skyimg);
         let sky_sprite = sky.add(DrawParam::default());
@@ -420,7 +420,7 @@ impl EventHandler for MainState {
             corr_angle = 2.0 * PI + corr_angle;
         }
         let mut draw_param = graphics::DrawParam::default();
-        draw_param.src = graphics::Rect::new(6.0 * corr_angle / (2.0 * PI), -self.player.pitch, 1.0, 1.0);
+        draw_param.src = graphics::Rect::new(6.0 * corr_angle / (2.0 * PI), -self.player.pitch/444.0, 1.0, 1.0);
         self.sky.set(self.sky_sprite, draw_param)?;
         graphics::draw(ctx, &self.sky, draw_param)?;
         let rect_w = w as usize / NUMOFRAYS;
