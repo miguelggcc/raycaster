@@ -4,32 +4,19 @@ use ggez::{
 };
 
 use crate::{player::Player, screen::Screen, utilities::vector2::Vector2};
-
+const PI: f32 = 3.1415926535897932384626;
 pub struct Sprite {
-    pub stype: u8,
+    pub stype: usize,
     image_texture: Vec<u8>,
-    pub texture: graphics::spritebatch::SpriteBatch,
-    armor: graphics::spritebatch::SpriteIdx,
     pub pos: Vector2<f32>,
     pub visible: bool,
 }
 
 impl Sprite {
-    pub fn new(
-        stype: u8,
-        imagevec: &Vec<u8>,
-        luis: &Image,
-        pos: Vector2<f32>,
-        visible: bool,
-    ) -> Self {
-        let mut texture = graphics::spritebatch::SpriteBatch::new(luis.clone());
-        let armor = texture.add(graphics::DrawParam::default());
-
+    pub fn new(stype: SpriteType, imagevec: &Vec<u8>, pos: Vector2<f32>, visible: bool) -> Self {
         Self {
-            stype,
+            stype: stype as usize,
             image_texture: imagevec.to_vec(),
-            texture,
-            armor,
             pos,
             visible,
         }
@@ -121,13 +108,24 @@ impl Sprite {
     ) {
         let (w, h) = graphics::drawable_size(ctx);
         let sprite_delpos = self.pos - player.pos;
-        let angle = (sprite_delpos.y).atan2(sprite_delpos.x);
+        let mut angle = (sprite_delpos.y).atan2(sprite_delpos.x);
         let angle_player = player.dir_norm.angle();
         let delta_angle = angle - angle_player;
         let cos = delta_angle.cos();
         let inv_det =
             1.0 / (player.plane.x * player.dir_norm.y - player.dir_norm.x * player.plane.y);
         let sprite_distance = self.calculate_distance_2(player);
+        let mut sprite_rotation = 0;
+        if self.stype == SpriteType::Bat as usize {
+            if angle < 0.0 {
+                angle = 2.0 * PI + angle;
+            }
+            sprite_rotation = (angle / (2.0 * PI) * 8.0).round() as usize;
+            if sprite_rotation > 7 {
+                sprite_rotation = 0;
+            }
+            sprite_rotation = 7 - sprite_rotation;
+        }
 
         let transform_x =
             inv_det * (player.dir_norm.y * sprite_delpos.x - player.dir_norm.x * sprite_delpos.y);
@@ -168,20 +166,30 @@ impl Sprite {
             if transform_y > 0.0
                 && stripe > 0
                 && stripe < w as usize
-                && end_y>0.0
+                && end_y > 0.0
+                && start_y < h
                 && distances[stripe / rect_w] * distances[stripe / rect_w] / cos > sprite_distance
             {
                 for y in start_y as usize..1 + end_y as usize {
                     screen.draw_texture(
                         &self.image_texture,
-                        [stx, sty[y - start_y as usize]],
+                        [
+                            sprite_rotation * 64 + stx,
+                            self.stype * 64 + sty[y - start_y as usize],
+                        ],
                         [stripe, y],
                         1,
                         num::clamp(19.0 / sprite_distance, 0.2, 1.0),
-                        64,
+                        512,
                     );
                 }
             }
         }
     }
+}
+
+pub enum SpriteType {
+    Armor = 0,
+    CandleHolder = 1,
+    Bat = 2,
 }

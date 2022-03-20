@@ -9,6 +9,7 @@ mod player;
 mod screen;
 mod sprite;
 mod utilities;
+//mod slice;
 use map::Map;
 use player::Player;
 use screen::Screen;
@@ -82,7 +83,7 @@ impl MainState {
             .map(|y| player.planedist / (2.0 * y as f32 - h))
             .collect();
 
-        let mut skyimg = graphics::Image::new(ctx, "/sky3.png")?;
+        let mut skyimg = graphics::Image::new(ctx, "/sky2.png")?;
         skyimg.set_wrap(graphics::WrapMode::Tile, graphics::WrapMode::Mirror);
         skyimg.set_filter(graphics::FilterMode::Nearest);
         let mut sky = graphics::spritebatch::SpriteBatch::new(skyimg);
@@ -122,23 +123,31 @@ impl MainState {
 
         let textures = graphics::Image::new(ctx, "/wall.png")?.to_rgba8(ctx)?;
 
-        let spritetvec = graphics::Image::new(ctx, "/armor.png")?.to_rgba8(ctx)?;
-        let mut spritet = graphics::Image::new(ctx, "/armor.png")?;
-        spritet.set_filter(graphics::FilterMode::Nearest);
+        let spritetvec = graphics::Image::new(ctx, "/sprite.png")?.to_rgba8(ctx)?;
 
         let mut sprites = Vec::new();
         sprites.push(Sprite::new(
-            1,
+            sprite::SpriteType::Armor,
             &spritetvec,
-            &spritet,
             Vector2::new(7.5, 7.5),
             false,
         ));
         sprites.push(Sprite::new(
-            1,
+            sprite::SpriteType::Armor,
             &spritetvec,
-            &spritet,
             Vector2::new(7.5, 9.5),
+            false,
+        ));
+        sprites.push(Sprite::new(
+            sprite::SpriteType::CandleHolder,
+            &spritetvec,
+            Vector2::new(12.5, 12.5),
+            false,
+        ));
+        sprites.push(Sprite::new(
+            sprite::SpriteType::Bat,
+            &spritetvec,
+            Vector2::new(6.5, 12.5),
             false,
         ));
 
@@ -178,8 +187,9 @@ impl MainState {
         }
 
         if delta_mouse_loc_y != 0.0 {
-            delta_mouse_loc_y -= 100.0;        }
-            self.player.pitch-=delta_mouse_loc_y*0.7;
+            delta_mouse_loc_y -= 100.0;
+        }
+        self.player.pitch -= delta_mouse_loc_y * 0.7;
 
         angle_of_rot += 0.085 * delta_mouse_loc_x;
         self.player.plane = Vector2::rotate(self.player.plane, angle_of_rot * DEG2RAD);
@@ -420,7 +430,12 @@ impl EventHandler for MainState {
             corr_angle = 2.0 * PI + corr_angle;
         }
         let mut draw_param = graphics::DrawParam::default();
-        draw_param.src = graphics::Rect::new(6.0 * corr_angle / (2.0 * PI), -self.player.pitch/444.0, 1.0, 1.0);
+        draw_param.src = graphics::Rect::new(
+            6.0 * corr_angle / (2.0 * PI),
+            0.4 - self.player.pitch / 864.0,
+            1.0,
+            1.0,
+        );
         self.sky.set(self.sky_sprite, draw_param)?;
         graphics::draw(ctx, &self.sky, draw_param)?;
         let rect_w = w as usize / NUMOFRAYS;
@@ -468,13 +483,13 @@ impl EventHandler for MainState {
                     shade = 0.7;
                 }
             }
-
-            /*if rect_h > h {
-                rect_h = h;
-            }*/
+            let mut rect_bottom_draw = rect_bottom;
+            if self.player.pitch + rect_bottom - 1.0 > h {
+                rect_bottom_draw = h - self.player.pitch-1.0;
+            }
 
             for y in (self.player.pitch + rect_top) as usize
-                ..(self.player.pitch + rect_bottom - 1.0) as usize
+                ..(self.player.pitch + rect_bottom_draw - 1.0) as usize
             {
                 self.screen.draw_texture(
                     &self.textures,
@@ -529,7 +544,11 @@ impl EventHandler for MainState {
                     32,
                 ); */
             }
-            for y in 0..(rect_top + self.player.pitch) as usize {
+            let mut rect_top_draw = rect_top;
+            if rect_top + self.player.pitch>h{
+                rect_top_draw = h-self.player.pitch;
+            }
+            for y in 0..(rect_top_draw + self.player.pitch) as usize {
                 for k in j * rect_w..j * rect_w + rect_w {
                     self.screen.draw_pixel(k, y as usize, &[0, 0, 0, 0]);
                 }
@@ -561,19 +580,13 @@ impl EventHandler for MainState {
                     graphics::draw(
                         ctx,
                         &self.mesh2,
-                        DrawParam::default().dest([
-                            self.cell_size / 2.0 * i as f32,
-                            self.cell_size / 2.0 * j as f32,
-                        ]),
+                        DrawParam::default().dest([16.0 * i as f32, 16.0 * j as f32]),
                     )?;
                 } else {
                     graphics::draw(
                         ctx,
                         &self.mesh1,
-                        DrawParam::default().dest([
-                            self.cell_size / 2.0 * i as f32,
-                            self.cell_size / 2.0 * j as f32,
-                        ]),
+                        DrawParam::default().dest([16.0 * i as f32, 16.0 * j as f32]),
                     )?;
                 }
             }

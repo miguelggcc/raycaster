@@ -52,7 +52,7 @@ impl Screen {
             let mut pixel: [u8; 4] = texture[pos..pos + 4].try_into().unwrap(); //rgba pixel
 
             if pixel[3] == 255 {
-                if shade != 1.0 {
+                if shade != 1.0 && pixel != [255, 0, 0, 255] {
                     //Draws shade depening of current lighting, darkening or brightening the pixel
 
                     pixel[0] = (pixel[0] as f32 * shade) as u8;
@@ -68,9 +68,8 @@ impl Screen {
 
     pub fn draw_pixel(&mut self, position_x: usize, position_y: usize, pixel: &[u8; 4]) {
         let i = position_y * self.width + position_x;
-        if (i << 2) + 4 < self.img_arr_len {
-            self.img_arr[(i << 2)..(i << 2) + 4].copy_from_slice(pixel);
-        }
+
+        self.img_arr[(i << 2)..(i << 2) + 4].copy_from_slice(pixel);
     }
     #[allow(dead_code)]
     pub fn draw_rect(

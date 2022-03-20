@@ -15,17 +15,31 @@ impl Slice{
             height,
         }
     }
+}
 
-    pub fn draw_texture(
-        self,
-        slice_v: &mut Vec<u8>,
+trait DrawStuff<T>{
+    fn draw_texture(&self,texture: &[u8],
+        texture_position: [usize; 2],
+        pixel_position: [usize; 2],
+        width_rect: usize,
+        shade: f32,
+        length: usize,)->Vec<T>;
+
+        fn draw_pixel(&self, position_x: usize, position_y: usize, pixel: &[T])->Vec<T>;
+}
+
+impl<T> DrawStuff<T> for Vec<T>
+where T: std::marker::Copy{
+
+     fn draw_texture(
+        &self,
         texture: &[u8],
         texture_position: [usize; 2],
         pixel_position: [usize; 2],
         width_rect: usize,
         shade: f32,
         length: usize,
-    ) {
+    ) -> Vec<T> {
         let pos = (texture_position[1] * length + texture_position[0]) << 2; //position of current pixel
         for i in 0..width_rect {
             // draws in rectangles of 1xwidth_rect size
@@ -44,15 +58,20 @@ impl Slice{
                 }
 
                 //Doesn't draw transparent pixels
-                self.draw_pixel(slice_v,pixel_position[0] + i, pixel_position[1], &pixel);
+                self.draw_pixel(pixel_position[0] + i, pixel_position[1], &pixel);
+                
             }
         } 
+        self
     }
+
+
     
-    pub fn draw_pixel(self, slice_v: &mut Vec<u8>, position_x: usize, position_y: usize, pixel: &[u8; 4]) {
-        let i = position_y * self.width + position_x;
-        if (i << 2) + 4 < self.slice_len {
-            slice_v[(i << 2)..(i << 2) + 4].copy_from_slice(pixel);
+     fn draw_pixel(&self, position_x: usize, position_y: usize, pixel: &[T])->Vec<T> {
+        let i = position_y * 30 + position_x;
+        if (i << 2) + 4 < 50 {
+            self[(i << 2)..(i << 2) + 4].copy_from_slice(pixel)
         }
+        self
     }
 }
