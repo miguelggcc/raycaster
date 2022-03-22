@@ -9,8 +9,10 @@ mod player;
 mod screen;
 mod sprite;
 mod utilities;
+mod slice;
 //mod slice;
 use map::Map;
+use num::clamp;
 use player::Player;
 use screen::Screen;
 use sprite::Sprite;
@@ -150,6 +152,13 @@ impl MainState {
             Vector2::new(6.5, 12.5),
             false,
         ));
+        sprites.push(Sprite::new(
+            sprite::SpriteType::Torch,
+            &spritetvec,
+            Vector2::new(9.0, 14.897),
+            false,
+        ));
+  
 
         Ok(Self {
             background_color,
@@ -190,6 +199,8 @@ impl MainState {
             delta_mouse_loc_y -= 100.0;
         }
         self.player.pitch -= delta_mouse_loc_y * 0.7;
+        
+       self.player.pitch = clamp( self.player.pitch, -300.0, 300.0);
 
         angle_of_rot += 0.085 * delta_mouse_loc_x;
         self.player.plane = Vector2::rotate(self.player.plane, angle_of_rot * DEG2RAD);
