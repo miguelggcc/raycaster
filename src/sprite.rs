@@ -130,4 +130,5 @@ pub enum SpriteType {
     CandleHolder = 1,
     Bat = 2,
     Torch = 3,
+    Gore = 4,
 }

@@ -158,6 +158,12 @@ impl MainState {
             Vector2::new(9.0, 14.897),
             false,
         ));
+        sprites.push(Sprite::new(
+            sprite::SpriteType::Gore,
+            &spritetvec,
+            Vector2::new(13.0, 3.0),
+            false,
+        ));
   
 
         Ok(Self {
