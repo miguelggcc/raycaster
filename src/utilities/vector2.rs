@@ -19,7 +19,7 @@ where
         Self { x, y }
     }
     #[allow(dead_code)]
-    pub fn to_array(&self) -> [T; 2] {
+    pub fn to_array(self) -> [T; 2] {
         [self.x, self.y]
     }
     #[allow(dead_code)]

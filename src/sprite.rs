@@ -1,26 +1,24 @@
 use ggez::{
     graphics::{self},
-    Context, timer,
+    Context,
 };
 
 use crate::{player::Player, screen::Screen, utilities::vector2::Vector2};
-const PI: f32 = 3.1415926535897932384626;
+const PI: f32 = std::f32::consts::PI;
 pub struct Sprite {
     pub stype: usize,
-    image_texture: Vec<u8>,
     pub pos: Vector2<f32>,
-    pub visible: bool,
     pub sprite_rotation: usize,
+    pub time: f32,
 }
 
 impl Sprite {
-    pub fn new(stype: SpriteType, imagevec: &Vec<u8>, pos: Vector2<f32>, visible: bool) -> Self {
+    pub fn new(stype: SpriteType, pos: Vector2<f32>) -> Self {
         Self {
             stype: stype as usize,
-            image_texture: imagevec.to_vec(),
             pos,
-            visible,
-            sprite_rotation:0,
+            sprite_rotation: 0,
+            time: 0.0,
         }
     }
     pub fn calculate_distance_2(&self, player: &Player) -> f32 {
@@ -28,12 +26,16 @@ impl Sprite {
             + (player.pos.y - self.pos.y) * (player.pos.y - self.pos.y) //square root not necessary
     }
 
+    pub fn update(&mut self, time: f32) {
+        self.time = time;
+    }
+
     pub fn draw(
         &mut self,
         ctx: &mut Context,
         player: &Player,
         screen: &mut Screen,
-        distances: &Vec<f32>,
+        distances: &[f32],
         rect_w: usize,
     ) {
         let (w, h) = graphics::drawable_size(ctx);
@@ -45,22 +47,6 @@ impl Sprite {
         let inv_det =
             1.0 / (player.plane.x * player.dir_norm.y - player.dir_norm.x * player.plane.y);
         let sprite_distance = self.calculate_distance_2(player);
-        if self.stype == SpriteType::Bat as usize {
-            if angle < 0.0 {
-                angle = 2.0 * PI + angle;
-            }
-            self.sprite_rotation = (angle / (2.0 * PI) * 8.0).round() as usize;
-           
-            self.sprite_rotation = 7 - self.sprite_rotation;
-        }
-        else if self.stype == SpriteType::Torch as usize{
-            if timer::check_update_time(ctx, 10){
-               self. sprite_rotation+=1;
-            }
-        }
-         if self.sprite_rotation > 7 {
-                self.sprite_rotation = 0;
-            }
 
         let transform_x =
             inv_det * (player.dir_norm.y * sprite_delpos.x - player.dir_norm.x * sprite_delpos.y);
@@ -88,41 +74,61 @@ impl Sprite {
             end_x = w - 1.0;
         }
 
-        let denominator = 64.0 / sprite_height;
-        let mut sty = Vec::new();
-        let shade = {if self.stype == SpriteType::Torch as usize{1.0}
-        else {num::clamp(19.0 / sprite_distance, 0.2, 1.0)}};
-        for y in start_y as usize..1 + end_y as usize {
-            //for every pixel of the current stripe
-            let d = (y as f32) - h * 0.5 + sprite_height * 0.5 - player.pitch;
-            sty.push((d * denominator) as usize);
-        }
-        for stripe in start_x as usize..1 + end_x as usize {
-            let stx = ((stripe as f32 - (-sprite_width * 0.5 + sprite_screen_x)) * 64.0
-                / sprite_width) as usize;
-            if transform_y > 0.0
-                && stripe > 0
-                && stripe < w as usize
-                && end_y > 0.0
-                && start_y < h
-                && distances[stripe / rect_w] * distances[stripe / rect_w] / (cos*cos) > sprite_distance
-            {
-                for y in start_y as usize..1 + end_y as usize {
-                    screen.draw_texture(
-                        &self.image_texture,
-                        [
-                            self.sprite_rotation * 64 + stx,
-                            self.stype * 64 + sty[y - start_y as usize],
-                        ],
-                        [stripe, y],
-                        1,
-                        shade,
-                        512,
-                    );
+        if transform_y > 0.0 && start_x < w && end_x > 0.0 && end_y > 0.0 && start_y < h {
+            if self.stype == SpriteType::Bat as usize {
+                if angle < 0.0 {
+                    angle += 2.0 * PI;
+                }
+                self.sprite_rotation = (angle / (2.0 * PI) * 8.0).round() as usize;
+
+                self.sprite_rotation = 7 - self.sprite_rotation;
+            } else if self.stype == SpriteType::Torch as usize {
+                self.sprite_rotation = (self.time % 1.0 * 8.0) as usize;
+            }
+            if self.sprite_rotation > 7 {
+                self.sprite_rotation = 0;
+            }
+
+            let denominator = 64.0 / sprite_height;
+            let mut sty = Vec::new();
+            let shade = {
+                if self.stype == SpriteType::Torch as usize {
+                    1.0
+                } else {
+                    num::clamp(19.0 / sprite_distance, 0.2, 1.0)
+                }
+            };
+
+            for y in start_y as usize..1 + end_y as usize {
+                //for every pixel of the current stripe
+                let d = (y as f32) - h * 0.5 + sprite_height * 0.5 - player.pitch;
+                sty.push((d * denominator) as usize);
+            }
+
+            for stripe in start_x as usize..1 + end_x as usize {
+                let stx = ((stripe as f32 - (-sprite_width * 0.5 + sprite_screen_x)) * 64.0
+                    / sprite_width) as usize;
+                if stripe > 0
+                    && stripe < w as usize
+                    && distances[stripe / rect_w] * distances[stripe / rect_w] / (cos * cos)
+                        > sprite_distance
+                {
+                    for y in start_y as usize..1 + end_y as usize {
+                        screen.draw_sprite(
+                            [
+                                self.sprite_rotation * 64 + stx,
+                                self.stype * 64 + sty[y - start_y as usize],
+                            ],
+                            [y, w as usize - stripe],
+                            1,
+                            shade,
+                            512,
+                        );
+                    }
                 }
             }
         }
-        }
+    }
 }
 
 pub enum SpriteType {
