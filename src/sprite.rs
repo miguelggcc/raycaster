@@ -5,6 +5,7 @@ use ggez::{
 
 use crate::{player::Player, screen::Screen, utilities::vector2::Vector2};
 const PI: f32 = std::f32::consts::PI;
+const SIZE: usize = 64;
 pub struct Sprite {
     pub stype: usize,
     pub pos: Vector2<f32>,
@@ -55,11 +56,11 @@ impl Sprite {
 
         let sprite_screen_x = (w * 0.5) * (1.0 + transform_x / transform_y);
         let sprite_height = (player.planedist / transform_y).abs();
-        let mut start_y = -sprite_height * 0.5 + h * 0.5 + player.pitch;
+        let mut start_y = -sprite_height * 0.5 + h * 0.5 + player.pitch + player.jump / transform_y;
         if start_y < 0.0 {
             start_y = 0.0;
         }
-        let mut end_y = sprite_height * 0.5 + h * 0.5 + player.pitch;
+        let mut end_y = sprite_height * 0.5 + h * 0.5 + player.pitch + player.jump / transform_y;
         if end_y > h - 1.0 {
             end_y = h - 1.0;
         }
@@ -89,7 +90,7 @@ impl Sprite {
                 self.sprite_rotation = 0;
             }
 
-            let denominator = 64.0 / sprite_height;
+            let denominator = SIZE as f32 / sprite_height;
             let mut sty = Vec::new();
             let shade = {
                 if self.stype == SpriteType::Torch as usize {
@@ -101,12 +102,14 @@ impl Sprite {
 
             for y in start_y as usize..1 + end_y as usize {
                 //for every pixel of the current stripe
-                let d = (y as f32) - h * 0.5 + sprite_height * 0.5 - player.pitch;
+                let d = (y as f32) - h * 0.5 + sprite_height * 0.5
+                    - player.pitch
+                    - player.jump / transform_y;
                 sty.push((d * denominator) as usize);
             }
 
             for stripe in start_x as usize..1 + end_x as usize {
-                let stx = ((stripe as f32 - (-sprite_width * 0.5 + sprite_screen_x)) * 64.0
+                let stx = ((stripe as f32 - (-sprite_width * 0.5 + sprite_screen_x)) * SIZE as f32
                     / sprite_width) as usize;
                 if stripe > 0
                     && stripe < w as usize
@@ -116,13 +119,13 @@ impl Sprite {
                     for y in start_y as usize..1 + end_y as usize {
                         screen.draw_sprite(
                             [
-                                self.sprite_rotation * 64 + stx,
-                                self.stype * 64 + sty[y - start_y as usize],
+                                self.sprite_rotation * SIZE + stx,
+                                self.stype * SIZE + sty[y - start_y as usize],
                             ],
                             [y, w as usize - stripe],
                             1,
                             shade,
-                            512,
+                            SIZE*8,
                         );
                     }
                 }

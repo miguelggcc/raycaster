@@ -58,7 +58,9 @@ impl Screen {
 
             if pixel[3] == 255 {
                 if shade != 1.0 {
-                    (0..3).for_each(|j| pixel[j] = (pixel[j] as f32 * shade) as u8);
+                    pixel[0] = (pixel[0] as f32 * shade) as u8;
+                    pixel[1] = (pixel[1] as f32 * shade * 0.9) as u8;
+                    pixel[2] = (pixel[2] as f32 * shade * 0.75) as u8;
                 }
 
                 //Doesn't draw transparent pixels
