@@ -31,7 +31,7 @@ impl Player {
         let mesh = MeshBuilder::new()
             .circle(
                 DrawMode::fill(),
-                [11.0 * 16.0, h - 8.0 * 16.0],
+                [10.0 * 16.0, h - 7.0 * 16.0],
                 4.0,
                 0.1,
                 Color::new(145.0 / 255.0, 25.0 / 255.0, 16.0 / 255.0, 1.0),

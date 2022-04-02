@@ -466,12 +466,12 @@ impl MainState {
         }
 
         let mut rect_bottom_draw = rect_bottom;
-        if self.player.pitch + pos_z + rect_bottom - 1.0 > h {
-            rect_bottom_draw = h - self.player.pitch - pos_z - 1.0;
+        if self.player.pitch + pos_z + rect_bottom  > h {
+            rect_bottom_draw = h - self.player.pitch - pos_z;
         }
 
         for y in (self.player.pitch + pos_z + rect_top) as usize
-            ..(self.player.pitch + pos_z + rect_bottom_draw - 1.0) as usize
+            ..(self.player.pitch + pos_z + rect_bottom_draw-1.0 ) as usize
         {
             self.screen.draw_texture(
                 slice,
@@ -491,7 +491,7 @@ impl MainState {
         }
 
         //draw floor
-        for y in (self.player.pitch + pos_z + rect_bottom) as usize..(h) as usize {
+        for y in (self.player.pitch + pos_z + rect_bottom-1.0) as usize..(h) as usize {
             if !(j > 24 && j < 308 && y > 559) {
                 // Don't draw the floor behind the minimap image
                 let current_dist = self.buffer_floors[y]; // Use a buffer since they're always the same values
@@ -621,7 +621,7 @@ impl EventHandler for MainState {
         let mut img_arr = std::mem::take(&mut self.screen.img_arr);
 
         img_arr
-            .par_chunks_mut(h as usize * 4)
+            .chunks_mut(h as usize * 4)
             .enumerate()
             .for_each(|(j, slice)| self.draw_slice(slice, w as usize - 1 - j, w, h));
 
@@ -655,7 +655,7 @@ impl EventHandler for MainState {
 
         self.map.draw_minimap(ctx, self.map_size, &self.player)?;
 
-        if let Some(mesh_line) = &self.mesh_line {
+       /* if let Some(mesh_line) = &self.mesh_line {
             graphics::draw(
                 ctx,
                 mesh_line,
@@ -663,7 +663,7 @@ impl EventHandler for MainState {
                     .offset([0.0, 0.0])
                     .dest([11.0 * 16.0, h - 8.0 * 16.0]),
             )?;
-        }
+        }*/
 
         self.player.draw_circle(ctx)?;
 

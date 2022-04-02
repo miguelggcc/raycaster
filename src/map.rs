@@ -62,14 +62,35 @@ impl Map {
         }
 
         let mut sprite_offset;
-        for i in left as usize..(right) as usize {
-            for j in top as usize..bottom as usize {
+        for i in left as usize..(right).ceil() as usize {
+            for j in top as usize..bottom.floor() as usize {
                 if self.walls[i + map_size.0 * j] > 0 {
                     sprite_offset = 0.0;
                 } else {
                     sprite_offset = 0.5;
                 }
-                if i == left as usize {
+
+                if i == left as usize && j == top as usize{
+                    self.sb.add(get_drawparam(
+                        player,
+                        left,
+                        top,
+                        left % 1.0 * 0.5 + sprite_offset,
+                        top%1.0,
+                        0.5 * (1.0 - left % 1.0),
+                        1.0 - top % 1.0,
+                    ));
+                }else if i == right as usize && j == top as usize{
+                    self.sb.add(get_drawparam(
+                        player,
+                        (right).floor(),
+                        top,
+                        sprite_offset,
+                        top%1.0,
+                        0.5 * (right % 1.0),
+                        1.0 - top % 1.0,
+                    ));
+                }else if i == left as usize {
                     self.sb.add(get_drawparam(
                         player,
                         left,
@@ -77,24 +98,38 @@ impl Map {
                         left % 1.0 * 0.5 + sprite_offset,
                         0.0,
                         0.5 * (1.0 - left % 1.0),
+                        1.0,
                     ));
-                } else if i == (right - 1.0) as usize {
+                } else if i == (right ) as usize {
                     self.sb.add(get_drawparam(
                         player,
-                        (right - 1.0).floor() + sprite_offset,
+                        (right).floor(),
                         j as f32,
-                        0.0,
+                         sprite_offset,
                         0.0,
                         0.5 * (right % 1.0),
+                        1.0,
+                    ));
+                }
+                else if j == top as usize {
+                    self.sb.add(get_drawparam(
+                        player,
+                        i as f32,
+                        top,
+                         sprite_offset,
+                        top%1.0,
+                        0.5,
+                         1.0 - top % 1.0,
                     ));
                 } else {
                     self.sb.add(get_drawparam(
                         player,
                         i as f32,
                         j as f32,
-                        0.0 + sprite_offset,
+                         sprite_offset,
                         0.0,
                         0.5,
+                        1.0,
                     ));
                 }
             }
@@ -180,11 +215,12 @@ fn get_drawparam(
     x_start: f32,
     y_start: f32,
     width: f32,
+    height: f32,
 ) -> DrawParam {
     DrawParam::default()
         .dest([
-            16.0 * (11.0 - player.pos.x + x_offset),
-            16.0 * (8.0 - player.pos.y + y_offset),
+            16.0 * (10.0 - player.pos.x + x_offset),
+            16.0 * (9.0 - player.pos.y + y_offset),
         ])
-        .src(Rect::new(x_start, y_start, width, 1.0))
+        .src(Rect::new(x_start, y_start, width, height))
 }
