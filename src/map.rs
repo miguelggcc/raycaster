@@ -8,8 +8,8 @@ use ggez::{
 use crate::player::Player;
 
 pub struct Map {
-    pub walls: Vec<u8>,
-    pub floors: Vec<u8>,
+    pub walls: Vec<usize>,
+    pub floors: Vec<usize>,
     pub solid: Vec<bool>,
     pub doors: HashMap<usize, Door>,
     pub minimap: Image,
@@ -23,12 +23,12 @@ impl Map {
         path_floors: &Path,
         minimap: Image,
         sb: graphics::spritebatch::SpriteBatch,
-        map_size: (usize,usize),
-    ) -> GameResult<Self> {       
-         let mut solid =  vec![true;map_size.0*map_size.1];
+        map_size: (usize, usize),
+    ) -> GameResult<Self> {
+        let mut solid = vec![true; map_size.0 * map_size.1];
         let mut doors = HashMap::new();
         Ok(Self {
-            walls: read_map_walls(ctx, path_walls,&mut solid, &mut doors, )?,
+            walls: read_map_walls(ctx, path_walls, &mut solid, &mut doors)?,
             floors: read_map_floors(ctx, path_floors)?,
             solid,
             doors,
@@ -70,27 +70,27 @@ impl Map {
                     sprite_offset = 0.5;
                 }
 
-                if i == left as usize && j == top as usize{
+                if i == left as usize && j == top as usize {
                     self.sb.add(get_drawparam(
                         player,
                         left,
                         top,
                         left % 1.0 * 0.5 + sprite_offset,
-                        top%1.0,
+                        top % 1.0,
                         0.5 * (1.0 - left % 1.0),
                         1.0 - top % 1.0,
                     ));
-                }else if i == right as usize && j == top as usize{
+                } else if i == right as usize && j == top as usize {
                     self.sb.add(get_drawparam(
                         player,
                         (right).floor(),
                         top,
                         sprite_offset,
-                        top%1.0,
+                        top % 1.0,
                         0.5 * (right % 1.0),
                         1.0 - top % 1.0,
                     ));
-                }else if i == left as usize {
+                } else if i == left as usize {
                     self.sb.add(get_drawparam(
                         player,
                         left,
@@ -100,33 +100,32 @@ impl Map {
                         0.5 * (1.0 - left % 1.0),
                         1.0,
                     ));
-                } else if i == (right ) as usize {
+                } else if i == (right) as usize {
                     self.sb.add(get_drawparam(
                         player,
                         (right).floor(),
                         j as f32,
-                         sprite_offset,
+                        sprite_offset,
                         0.0,
                         0.5 * (right % 1.0),
                         1.0,
                     ));
-                }
-                else if j == top as usize {
+                } else if j == top as usize {
                     self.sb.add(get_drawparam(
                         player,
                         i as f32,
                         top,
-                         sprite_offset,
-                        top%1.0,
+                        sprite_offset,
+                        top % 1.0,
                         0.5,
-                         1.0 - top % 1.0,
+                        1.0 - top % 1.0,
                     ));
                 } else {
                     self.sb.add(get_drawparam(
                         player,
                         i as f32,
                         j as f32,
-                         sprite_offset,
+                        sprite_offset,
                         0.0,
                         0.5,
                         1.0,
@@ -145,9 +144,9 @@ pub fn read_map_walls(
     path: &Path,
     can_pass: &mut Vec<bool>,
     door_offset: &mut HashMap<usize, Door>,
-) -> GameResult<Vec<u8>> {
+) -> GameResult<Vec<usize>> {
     let map = graphics::Image::new(ctx, path)?.to_rgba8(ctx)?;
-    let walls: Vec<u8> = map
+    let walls: Vec<usize> = map
         .chunks(4)
         .enumerate()
         .map(|(i, color)| match color {
@@ -161,16 +160,19 @@ pub fn read_map_walls(
                 door_offset.insert(i, door);
                 6
             }
-            _ => {can_pass[i] = false; 0},
+            _ => {
+                can_pass[i] = false;
+                0
+            }
         })
         .collect();
 
     Ok(walls)
 }
 
-pub fn read_map_floors(ctx: &mut Context, path: &Path) -> GameResult<Vec<u8>> {
+pub fn read_map_floors(ctx: &mut Context, path: &Path) -> GameResult<Vec<usize>> {
     let fmap = graphics::Image::new(ctx, path)?.to_rgba8(ctx)?;
-    let floors: Vec<u8> = fmap
+    let floors: Vec<usize> = fmap
         .into_iter()
         .step_by(4)
         .map(|r| if r == 0 { 1 } else { 0 })

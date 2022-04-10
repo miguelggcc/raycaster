@@ -1,14 +1,16 @@
 use std::path::Path;
 
-use ggez::event::{EventHandler, KeyCode};
+use ggez::event::{EventHandler, KeyCode, KeyMods};
 use ggez::graphics::{self, Color, DrawParam, Mesh, MeshBuilder};
 use ggez::input::keyboard::is_key_pressed;
 use ggez::{timer, Context, GameResult};
+mod lighting;
 mod map;
 mod player;
 mod screen;
 mod sprite;
 mod utilities;
+use lighting::Lighting;
 use map::Map;
 use num::clamp;
 use player::Player;
@@ -21,7 +23,7 @@ use utilities::vector2::Vector2;
 use crate::utilities::input::get_delta;
 
 const PI: f32 = std::f32::consts::PI;
-const NUMOFRAYS: usize = 1200;
+const RAYSPERPIXEL: usize = 1;
 const FOV: f32 = 45.0;
 pub struct MainState {
     player: Player,
@@ -33,10 +35,10 @@ pub struct MainState {
     buffer_walking: Vec<f32>,
     sky: Sky,
     intersections: Intersections,
-    mesh_line: Option<Mesh>,
     screen: Screen,
     sprites: Vec<Sprite>,
     time: f32,
+    lighting: Lighting,
 }
 
 impl MainState {
@@ -72,9 +74,10 @@ impl MainState {
 
         set_mouse_location(ctx, Vector2::new(w * 0.5, h * 0.5)).unwrap();
 
-        let angles: Vec<f32> = (0..NUMOFRAYS)
+        let angles: Vec<f32> = (0..w as usize / RAYSPERPIXEL)
             .map(|r: usize| {
-                ((r as f32 * w / (NUMOFRAYS as f32 - 1.0) - w * 0.5) / player.planedist).atan()
+                ((r as f32 * w / (w / (RAYSPERPIXEL as f32) - 1.0) - w * 0.5) / player.planedist)
+                    .atan()
             })
             .collect();
 
@@ -94,13 +97,11 @@ impl MainState {
         let sky = Sky { sb, idx };
         let intersections = Intersections::new();
 
-        let mesh_line = None;
-
         let wall_textures = graphics::Image::new(ctx, "/wall128.png")?.to_rgba8(ctx)?;
 
-        let sprite_textures = graphics::Image::new(ctx, "/sprite.png")?.to_rgba8(ctx)?;
+        let sprite_textures = graphics::Image::new(ctx, "/sprite128.png")?.to_rgba8(ctx)?;
 
-        let mut screen = Screen::new(h, w);
+        let mut screen = Screen::new(h, w, 128, 128 * 8);
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![
@@ -113,6 +114,12 @@ impl MainState {
             Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
         ];
 
+        let lighting = lighting::Lighting::new(
+            vec![1 + map_size.0 * 3, 14 + map_size.0 * 7, 8 + map_size.0 * 24],
+            &map.solid,
+            map_size,
+        );
+
         Ok(Self {
             player,
             map_size,
@@ -123,10 +130,10 @@ impl MainState {
             buffer_walking,
             sky,
             intersections,
-            mesh_line,
             screen,
             sprites,
             time: 0.0,
+            lighting,
         })
     }
 
@@ -189,15 +196,15 @@ impl MainState {
         }
 
         if self.player.walking {
-            let cell_check_y =self.map.solid
+            let cell_check_y = self.map.solid
                 [(check_pos_y.x) as usize + (check_pos_y.y) as usize * self.map_size.0];
             let cell_check_x = self.map.solid
                 [(check_pos_x.x) as usize + (check_pos_x.y) as usize * self.map_size.0];
 
-            if cell_check_y{
+            if cell_check_y {
                 dir.y = 0.0;
             }
-            if cell_check_x{
+            if cell_check_x {
                 dir.x = 0.0;
             }
             dir.normalize();
@@ -236,7 +243,12 @@ impl MainState {
         }
     }
 
-    pub fn calculate_ray(&mut self, ray_dir_player: Vector2<f32>, theta: f32) -> GameResult {
+    pub fn calculate_ray(
+        &mut self,
+        ray_dir_player: Vector2<f32>,
+        theta: f32,
+        j: usize,
+    ) -> GameResult {
         let ray_dir_norm = Vector2::rotate(ray_dir_player, theta);
         let ray_unitstep_size = Vector2::new(
             (1.0 + (ray_dir_norm.y / ray_dir_norm.x) * (ray_dir_norm.y / ray_dir_norm.x)).sqrt(),
@@ -328,12 +340,19 @@ impl MainState {
                             }
                         } else {
                             // side wall
-                            orientation = Orientation::W;
+                            if ray_dir_norm.x < 0.0 {
+                                orientation = Orientation::W;
+                                map_checkv.x-=1.0;
+                            } else {
+                                orientation = Orientation::E;
+                                map_checkv.x+=1.0;
+                            }
                             wall_type = 7;
                             distance = ray_length1_d.x;
+
                         }
                     } else if orientation == Orientation::E || orientation == Orientation::W {
-                        if ray_length1_d.x - 0.5 * ray_unitstep_size.x < ray_length1_d.y {
+                        if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
                             distance = ray_length1_d.x - ray_unitstep_size.x * 0.5;
                             if door_offset < 1.0 {
                                 let pos_y = (startv.y + ray_dir_norm.y * distance) % 1.0;
@@ -343,48 +362,53 @@ impl MainState {
                                 }
                             }
                         } else {
-                            orientation = Orientation::N;
+                            if ray_dir_norm.y < 0.0 {
+                                orientation = Orientation::S;
+                                map_checkv.y-=1.0;
+                            } else {
+                                orientation = Orientation::N;
+                                map_checkv.y+=1.0;
+                            }
                             wall_type = 7;
                             distance = ray_length1_d.y;
                         }
                     }
-                }
-                 
-                 else if wall_type > 0 {
+                } else if wall_type > 0 {
                     tilefound = true;
                 }
-        if (orientation==Orientation::W || orientation== Orientation::E) && self.map.walls[startv.y as usize * self.map_size.0 + (map_checkv.x-stepv.x) as usize]==6{
-                        wall_type = 7;}
-        else if (orientation==Orientation::N || orientation== Orientation::S) && self.map.walls[(map_checkv.y-stepv.y) as usize * self.map_size.0 + startv.x as usize]==6{
-                            wall_type = 7;}
+                if ((orientation == Orientation::W || orientation == Orientation::E)
+                    && self.map.walls
+                        [startv.y as usize * self.map_size.0 + (map_checkv.x - stepv.x) as usize]
+                        == 6)
+                    || ((orientation == Orientation::N || orientation == Orientation::S)
+                        && self.map.walls[(map_checkv.y - stepv.y) as usize * self.map_size.0
+                            + startv.x as usize]
+                            == 6)
+                {
+                    wall_type = 7;
+                }
                 if tilefound {
                     let intersection = startv + ray_dir_norm * distance;
-                    self.intersections.points.push(intersection.to_array());
-                    self.intersections.distance_fisheye.push(distance);
+                    self.intersections.points[j] = intersection.to_array();
+                    self.intersections.distance_fisheye[j] = distance;
                     distance *= (theta).cos();
 
-                    self.intersections.distances.push(distance);
-                    self.intersections.wall_type.push(wall_type as usize);
-                    self.intersections
-                        .map_checkv
-                        .push(map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize);
-                    self.intersections.orientation.push(orientation);
-                    self.intersections.line_points.push([0.0, 0.0]);
-                    self.intersections
-                        .line_points
-                        .push(((intersection - self.player.pos) * 16.0).to_array());
+                    self.intersections.distances[j] = distance;
+                    self.intersections.wall_type[j] = wall_type as usize;
+                    self.intersections.map_checkv[j] =
+                        map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize;
+                    self.intersections.orientation[j] = orientation;
                 }
             }
         }
         Ok(())
     }
 
-    fn draw_slice(&self, slice: &mut [u8], j: usize, w: f32, h: f32) {
-        let rect_w = w as usize / NUMOFRAYS;
+    fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
         let rect_h = self.player.planedist / (self.intersections.distances[j]);
-        let rect_top = (h - rect_h) * 0.5;
-        let rect_bottom = (h + rect_h) * 0.5;
-        let ty_step = self.cell_size / rect_h;
+        let rect_top = ((h - rect_h) * 0.5).round();
+        let rect_bottom = ((h + rect_h) * 0.5);
+        let ty_step = (self.cell_size) / rect_h;
         let pos = self.intersections.points[j];
 
         let inter_x = pos[0] - pos[0].floor();
@@ -395,34 +419,30 @@ impl MainState {
         let pos_z = self.player.jump / (self.intersections.distances[j]);
         //draw walls
         let mut ty = {
-            if rect_bottom - self.player.pitch - pos_z > h {
+            if rect_bottom - self.player.pitch - pos_z >= h {
                 (-self.player.pitch - pos_z - rect_top) * ty_step
             } else if rect_top + self.player.pitch + pos_z < 0.0 {
                 (-self.player.pitch - pos_z - rect_bottom) * ty_step
             } else {
-                0.0f32
+                0.0
             }
         };
+     
         let mut tx;
-        let shade;
         match self.intersections.orientation[j] {
             Orientation::N => {
                 tx = inter_x * self.cell_size;
                 tx = self.cell_size - 1.0 - tx.floor();
-                shade = 1.0;
             }
             Orientation::E => {
                 tx = inter_y * self.cell_size;
-                shade = 0.7
             }
             Orientation::S => {
                 tx = inter_x * self.cell_size;
-                shade = 1.0;
             }
             Orientation::W => {
                 tx = inter_y * self.cell_size;
                 tx = self.cell_size - 1.0 - tx.floor();
-                shade = 0.7;
             }
         }
         if wall_type == 6 {
@@ -465,34 +485,45 @@ impl MainState {
             }
         }
 
-        let mut rect_bottom_draw = rect_bottom;
-        if self.player.pitch + pos_z + rect_bottom  > h {
-            rect_bottom_draw = h - self.player.pitch - pos_z;
-        }
+        let rect_bottom_draw = {
+            if self.player.pitch + pos_z + rect_bottom >= h {
+                h - self.player.pitch - pos_z
+            } else {
+                rect_bottom
+            }
+        };
 
         for y in (self.player.pitch + pos_z + rect_top) as usize
-            ..(self.player.pitch + pos_z + rect_bottom_draw-1.0 ) as usize
+            ..(self.player.pitch + pos_z + rect_bottom_draw) as usize
         {
+            if ty >= 128.0 {
+                dbg!(rect_h,rect_top,rect_bottom, ty,self.player.pitch + pos_z + rect_top,self.player.pitch + pos_z + rect_bottom_draw);
+                ty = 127.0;
+            }
+
             self.screen.draw_texture(
                 slice,
                 [tx as usize, wall_type * 128 + ty as usize],
-                [0, y],
-                rect_w,
-                num::clamp(
-                    shade * 16.0
-                        / (self.intersections.distance_fisheye[j]
-                            * self.intersections.distance_fisheye[j]),
-                    0.2,
-                    1.5,
-                ),
-                128,
+                y,
+                RAYSPERPIXEL,
+                self.lighting.get_lighting_wall(
+                    tx / 128.0,
+                    ty *0.0234375, //*3/128
+                    self.intersections.map_checkv[j],
+                    &self.intersections.orientation[j],
+                )/*  + num::clamp(
+                           5.0/ (self.intersections.distance_fisheye[j]
+                               * self.intersections.distance_fisheye[j]),
+                       0.0,
+                       1.5,
+                   )*/
             );
             ty += ty_step;
         }
 
         //draw floor
-        for y in (self.player.pitch + pos_z + rect_bottom-1.0) as usize..(h) as usize {
-            if !(j > 24 && j < 308 && y > 559) {
+        for y in (self.player.pitch + pos_z + rect_bottom) as usize..(h) as usize {
+            if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 559) {
                 // Don't draw the floor behind the minimap image
                 let current_dist = self.buffer_floors[y]; // Use a buffer since they're always the same values
                 let weight = current_dist / (self.intersections.distances[j]);
@@ -501,19 +532,24 @@ impl MainState {
                 let current_floor_x = weight * pos[0] + rhs.x;
                 let current_floor_y = weight * pos[1] + rhs.y;
 
-                let floor_type = self.map.floors
-                    [current_floor_x as usize + current_floor_y as usize * self.map_size.0];
+                let location =
+                    current_floor_x as usize + current_floor_y as usize * self.map_size.0;
+                let floor_type = self.map.floors[location];
 
                 let ftx = (current_floor_x * self.cell_size) as usize % 128;
                 let fty = (current_floor_y * self.cell_size) as usize % 128;
-
                 self.screen.draw_texture(
                     slice,
-                    [ftx, (floor_type * 128) as usize + fty],
-                    [0, y],
-                    rect_w,
-                    num::clamp(12.25 / (current_dist * current_dist), 0.2, 1.2),
-                    128,
+                    [ftx, (floor_type * 128) + fty],
+                    y,
+                    RAYSPERPIXEL,
+                    /*num::clamp(7.5 / (current_dist * current_dist), 0.0, 1.2)+*/
+                    self.lighting.get_lighting_floor(
+                        ftx as f32 / 128.0,
+                        fty as f32 / 128.0,
+                        location,
+                    ), /*+num::clamp(5.0 / (current_dist * current_dist), 0.0, 1.5),*/
+                       //
                 );
             }
         }
@@ -537,10 +573,13 @@ impl MainState {
             self.screen.draw_texture(
                 slice,
                 [ftx, fty],
-                [0, y],
-                rect_w as usize,
-                num::clamp(3.5 / (current_dist * current_dist), 0.2, 1.2),
-                128,
+                y,
+                RAYSPERPIXEL,
+                self.lighting.get_lighting_floor(
+                    ftx as f32 / 128.0,
+                    fty as f32 / 128.0,
+                    current_floor_x as usize + current_floor_y as usize * self.map_size.0,
+                ), //num::clamp(3.5 / (current_dist * current_dist), 0.2, 1.2),
             );
         }
         /*
@@ -549,19 +588,36 @@ impl MainState {
                 self.screen.draw_pixel(slice, k, y as usize, &[0, 0, 0, 0]);
             }
         }*/
+
+        self.sprites.iter().for_each(|sprite| {
+            sprite.draw(
+                slice,
+                &self.player,
+                j,
+                &self.screen,
+                self.intersections.distances[j],
+                RAYSPERPIXEL,
+            )
+        })
     }
 }
 impl EventHandler for MainState {
+    fn key_down_event(&mut self,ctx: &mut Context,keycode: KeyCode,_: KeyMods,_: bool){
+        match keycode{
+            KeyCode::L=>self.lighting.switch=!self.lighting.switch,
+            KeyCode::K=>self.lighting.smooth_switch = !self.lighting.smooth_switch,
+            KeyCode::Escape=>ggez::event::quit(ctx),
+            _=>()
+        }
+    }
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.time += timer::delta(ctx).as_secs_f32();
         self.handle_input(ctx, self.player.dir_norm);
 
         self.player.walk_animation(&self.buffer_walking, self.time);
 
-        self.intersections.clear();
-
-        for angle in self.angles.clone() {
-            self.calculate_ray(self.player.dir_norm, angle)?;
+        for j in 0..self.angles.len() {
+            self.calculate_ray(self.player.dir_norm, self.angles[j], j)?;
         }
         self.sprites
             .iter_mut()
@@ -572,24 +628,19 @@ impl EventHandler for MainState {
                 d.update(self.time, 0.01, &mut self.map.solid)
             }
         });
-        if self.intersections.points.len() > 2 {
-            self.mesh_line = Some({
-                MeshBuilder::new()
-                    .line(
-                        &self.intersections.line_points,
-                        1.0,
-                        Color::new(1.0, 1.0, 1.0, 0.5),
-                    )?
-                    .build(ctx)?
-            });
-        }
+
+        
+        /*self.lighting = lighting::Lighting::new(
+            vec![2 + self.map_size.0 * 3, 14 + self.map_size.0 * 7, 8 + self.map_size.0 * 24],
+            &self.map.solid,
+            self.map_size,
+        );*/
 
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let (w, h) = graphics::drawable_size(ctx);
-        let rect_w = w as usize / NUMOFRAYS;
         graphics::clear(ctx, Color::BLACK);
         let mut corr_angle = self.player.dir_norm.angle();
         if corr_angle < 0.0 {
@@ -618,30 +669,26 @@ impl EventHandler for MainState {
             }
         });
 
-        let mut img_arr = std::mem::take(&mut self.screen.img_arr);
-
-        img_arr
-            .chunks_mut(h as usize * 4)
-            .enumerate()
-            .for_each(|(j, slice)| self.draw_slice(slice, w as usize - 1 - j, w, h));
-
-        self.screen.img_arr = img_arr;
+        self.sprites
+            .iter_mut()
+            .for_each(|sprite| sprite.set_drawing_bounds(ctx, &self.player, RAYSPERPIXEL as f32));
 
         self.sprites.sort_by(|a: &Sprite, b: &Sprite| {
             b.calculate_distance_2(&self.player)
-                .partial_cmp(&a.calculate_distance_2(&self.player))
+                .partial_cmp(&a.distance2)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        self.sprites.iter_mut().for_each(|sprite| {
-            sprite.draw(
-                ctx,
-                &self.player,
-                &mut self.screen,
-                &self.intersections.distances,
-                rect_w,
-            )
-        });
+        let mut img_arr = std::mem::take(&mut self.screen.img_arr);
+
+        img_arr
+            .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
+            .enumerate()
+            .for_each(|(j, slice)| self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h));
+
+        self.screen.img_arr = img_arr;
+
         let img = self.screen.arr_to_rgba(ctx)?;
+
         graphics::draw(
             ctx,
             &img,
@@ -654,16 +701,6 @@ impl EventHandler for MainState {
         draw_fps_counter(ctx)?;
 
         self.map.draw_minimap(ctx, self.map_size, &self.player)?;
-
-       /* if let Some(mesh_line) = &self.mesh_line {
-            graphics::draw(
-                ctx,
-                mesh_line,
-                DrawParam::new()
-                    .offset([0.0, 0.0])
-                    .dest([11.0 * 16.0, h - 8.0 * 16.0]),
-            )?;
-        }*/
 
         self.player.draw_circle(ctx)?;
 
@@ -692,7 +729,6 @@ pub struct Intersections {
     map_checkv: Vec<usize>,
     orientation: Vec<Orientation>,
     wall_type: Vec<usize>,
-    line_points: Vec<[f32; 2]>,
 }
 
 impl Default for Intersections {
@@ -704,27 +740,16 @@ impl Default for Intersections {
 impl Intersections {
     pub fn new() -> Self {
         Self {
-            points: Vec::with_capacity(NUMOFRAYS),
-            distances: Vec::with_capacity(NUMOFRAYS),
-            distance_fisheye: Vec::with_capacity(NUMOFRAYS),
-            map_checkv: Vec::with_capacity(NUMOFRAYS),
-            orientation: Vec::with_capacity(NUMOFRAYS),
-            wall_type: Vec::with_capacity(NUMOFRAYS),
-            line_points: Vec::with_capacity(NUMOFRAYS),
+            points: vec![[0.0, 0.0]; 1200],
+            distances: vec![0.0; 1200],
+            distance_fisheye: vec![0.0; 1200],
+            map_checkv: vec![0; 1200],
+            orientation: vec![Orientation::N; 1200],
+            wall_type: vec![0; 1200],
         }
     }
-
-    pub fn clear(&mut self) {
-        self.points.clear();
-        self.distances.clear();
-        self.distance_fisheye.clear();
-        self.map_checkv.clear();
-        self.orientation.clear();
-        self.wall_type.clear();
-        self.line_points.clear();
-    }
 }
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Orientation {
     N = 1,
     E = 2,

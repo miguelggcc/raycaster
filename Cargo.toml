@@ -10,3 +10,4 @@ debug = 1
 num = "0.4.0"
 ggez={version = "0.7.0"}
 rayon = "1.5.1"
+rand = "0.8.5"

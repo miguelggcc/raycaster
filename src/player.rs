@@ -59,7 +59,7 @@ impl Player {
         self.jump = self.height;
         if self.walking {
             let delta_jump = buffer_walking[(time % 0.5 * 300.0) as usize];
-            self.jump += delta_jump * 25.0;
+            self.jump += delta_jump * 35.0;
         }
     }
 }
