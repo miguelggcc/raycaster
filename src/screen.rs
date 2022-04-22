@@ -53,6 +53,7 @@ impl Screen {
         pixel_height: usize,
         width_rect: usize,
         shade: f32,
+        flashlight: f32,
     ) {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
         (0..width_rect).for_each(|i| {
@@ -62,16 +63,11 @@ impl Screen {
             }
             let mut pixel: [u8; 4] = self.wall_textures[pos..pos + 4].try_into().unwrap(); //rgba pixel
 
-            if pixel[3] == 255 {
-                //if shade != 1.0 {
-                pixel[0] = (pixel[0] as f32 * shade) as u8;
-                pixel[1] = (pixel[1] as f32 * shade * 0.9) as u8;
-                pixel[2] = (pixel[2] as f32 * shade * 0.75) as u8;
-                                                  //}
+                pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight)) as u8;
+                pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
+                pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;
 
-                //Doesn't draw transparent pixels
                 self.draw_pixel(img_arr, i * self.width + pixel_height, &pixel);
-            }
         });
     }
 

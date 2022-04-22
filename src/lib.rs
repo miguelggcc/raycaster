@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use ggez::event::{EventHandler, KeyCode, KeyMods};
-use ggez::graphics::{self, Color, DrawParam, Mesh, MeshBuilder};
+use ggez::graphics::{self, Color, DrawParam};
 use ggez::input::keyboard::is_key_pressed;
 use ggez::{timer, Context, GameResult};
 mod lighting;
@@ -10,7 +10,7 @@ mod player;
 mod screen;
 mod sprite;
 mod utilities;
-use lighting::Lighting;
+use lighting::{Lighting, Torch};
 use map::Map;
 use num::clamp;
 use player::Player;
@@ -23,7 +23,7 @@ use utilities::vector2::Vector2;
 use crate::utilities::input::get_delta;
 
 const PI: f32 = std::f32::consts::PI;
-const RAYSPERPIXEL: usize = 1;
+const RAYSPERPIXEL: usize = 2;
 const FOV: f32 = 45.0;
 pub struct MainState {
     player: Player,
@@ -39,12 +39,13 @@ pub struct MainState {
     sprites: Vec<Sprite>,
     time: f32,
     lighting: Lighting,
+    torch: Torch,
 }
 
 impl MainState {
     pub fn new(ctx: &mut Context) -> GameResult<Self> {
         let (w, h) = graphics::drawable_size(ctx);
-
+        graphics::set_fullscreen(ctx, ggez::conf::FullscreenType::Desktop)?;
         let pos = Vector2::new(8.5, 12.5);
         let dir_norm = Vector2::new(0.0f32, -1.0); // Player direction
         let plane = Vector2::new((FOV.to_radians() * 0.5).tan(), 0.0); //Camera plane vector
@@ -107,18 +108,21 @@ impl MainState {
         let sprites = vec![
             Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
             Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
-            Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
+            //Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
             Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 14.897)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.103, 12.0)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 15.0 - 0.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.5, 24.0 - 0.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.048, 12.0)),
             Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
         ];
 
         let lighting = lighting::Lighting::new(
-            vec![1 + map_size.0 * 3, 14 + map_size.0 * 7, 8 + map_size.0 * 24],
+            vec![1 + map_size.0 * 3, 14 + map_size.0 * 7, 8 + map_size.0 * 23],
             &map.solid,
             map_size,
         );
+
+        let torch = lighting::Torch::default();
 
         Ok(Self {
             player,
@@ -134,6 +138,7 @@ impl MainState {
             sprites,
             time: 0.0,
             lighting,
+            torch,
         })
     }
 
@@ -149,13 +154,13 @@ impl MainState {
 
         let mut angle_of_rot = 0.0f32;
         if delta_mouse_loc_x != 0.0 {
-            delta_mouse_loc_x -= 150.0; // resolution width middle minus window width middle
+            delta_mouse_loc_x -= 240.0; // resolution width middle minus window width middle
         }
 
         if delta_mouse_loc_y != 0.0 {
-            delta_mouse_loc_y -= 100.0;
+            delta_mouse_loc_y -= 135.0;
         }
-        self.player.pitch -= delta_mouse_loc_y * 0.7;
+        self.player.pitch -= delta_mouse_loc_y * 0.75;
 
         self.player.pitch = clamp(self.player.pitch, -300.0, 300.0);
 
@@ -228,10 +233,9 @@ impl MainState {
             if self.player.height > -300.0 {
                 self.player.height -= 30.0;
             }
-        } else {
-            if self.player.height < 0.0 {
+        } else if self.player.height < 0.0 {
                 self.player.height += 30.0;
-            }
+            
         }
 
         if is_key_pressed(ctx, KeyCode::Q) {
@@ -342,14 +346,13 @@ impl MainState {
                             // side wall
                             if ray_dir_norm.x < 0.0 {
                                 orientation = Orientation::W;
-                                map_checkv.x-=1.0;
+                                map_checkv.x -= 1.0;
                             } else {
                                 orientation = Orientation::E;
-                                map_checkv.x+=1.0;
+                                map_checkv.x += 1.0;
                             }
                             wall_type = 7;
                             distance = ray_length1_d.x;
-
                         }
                     } else if orientation == Orientation::E || orientation == Orientation::W {
                         if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
@@ -364,10 +367,10 @@ impl MainState {
                         } else {
                             if ray_dir_norm.y < 0.0 {
                                 orientation = Orientation::S;
-                                map_checkv.y-=1.0;
+                                map_checkv.y -= 1.0;
                             } else {
                                 orientation = Orientation::N;
-                                map_checkv.y+=1.0;
+                                map_checkv.y += 1.0;
                             }
                             wall_type = 7;
                             distance = ray_length1_d.y;
@@ -405,9 +408,10 @@ impl MainState {
     }
 
     fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
-        let rect_h = self.player.planedist / (self.intersections.distances[j]);
-        let rect_top = ((h - rect_h) * 0.5).round();
-        let rect_bottom = ((h + rect_h) * 0.5);
+        let rect_h =
+            (self.player.planedist / (self.intersections.distances[j]) * 100.0).round() / 100.0;
+        let rect_top = (h - rect_h) * 0.5;
+        let rect_bottom = (h + rect_h) * 0.5;
         let ty_step = (self.cell_size) / rect_h;
         let pos = self.intersections.points[j];
 
@@ -427,7 +431,7 @@ impl MainState {
                 0.0
             }
         };
-     
+
         let mut tx;
         match self.intersections.orientation[j] {
             Orientation::N => {
@@ -497,7 +501,15 @@ impl MainState {
             ..(self.player.pitch + pos_z + rect_bottom_draw) as usize
         {
             if ty >= 128.0 {
-                dbg!(rect_h,rect_top,rect_bottom, ty,self.player.pitch + pos_z + rect_top,self.player.pitch + pos_z + rect_bottom_draw);
+                dbg!(
+                    rect_h,
+                    rect_top,
+                    rect_bottom,
+                    ty,
+                    self.player.pitch + pos_z + rect_top,
+                    self.player.pitch + pos_z + rect_bottom_draw,
+                    self.player.pitch
+                );
                 ty = 127.0;
             }
 
@@ -506,24 +518,26 @@ impl MainState {
                 [tx as usize, wall_type * 128 + ty as usize],
                 y,
                 RAYSPERPIXEL,
-                self.lighting.get_lighting_wall(
-                    tx / 128.0,
-                    ty *0.0234375, //*3/128
-                    self.intersections.map_checkv[j],
-                    &self.intersections.orientation[j],
-                )/*  + num::clamp(
-                           5.0/ (self.intersections.distance_fisheye[j]
-                               * self.intersections.distance_fisheye[j]),
-                       0.0,
-                       1.5,
-                   )*/
+                self.torch.intensity
+                    * self.lighting.get_lighting_wall(
+                        tx / 128.0,
+                        ty * 0.0234375, //*3/128
+                        self.intersections.map_checkv[j],
+                        &self.intersections.orientation[j],
+                    ),
+                num::clamp(
+                    3.0 / (self.intersections.distance_fisheye[j]
+                        * self.intersections.distance_fisheye[j]),
+                    0.0,
+                    1.5,
+                ),
             );
             ty += ty_step;
         }
 
         //draw floor
         for y in (self.player.pitch + pos_z + rect_bottom) as usize..(h) as usize {
-            if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 559) {
+            if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 805) {
                 // Don't draw the floor behind the minimap image
                 let current_dist = self.buffer_floors[y]; // Use a buffer since they're always the same values
                 let weight = current_dist / (self.intersections.distances[j]);
@@ -538,19 +552,19 @@ impl MainState {
 
                 let ftx = (current_floor_x * self.cell_size) as usize % 128;
                 let fty = (current_floor_y * self.cell_size) as usize % 128;
+                let lighting = self.lighting.get_lighting_floor(
+                    ftx as f32 / 128.0,
+                    fty as f32 / 128.0,
+                    location,
+                );
                 self.screen.draw_texture(
                     slice,
                     [ftx, (floor_type * 128) + fty],
                     y,
                     RAYSPERPIXEL,
-                    /*num::clamp(7.5 / (current_dist * current_dist), 0.0, 1.2)+*/
-                    self.lighting.get_lighting_floor(
-                        ftx as f32 / 128.0,
-                        fty as f32 / 128.0,
-                        location,
-                    ), /*+num::clamp(5.0 / (current_dist * current_dist), 0.0, 1.5),*/
-                       //
-                );
+                    self.torch.intensity * lighting,
+                    num::clamp(3.0 / (current_dist * current_dist), 0.0, 1.5),
+                )
             }
         }
         //draw ceiling
@@ -559,7 +573,6 @@ impl MainState {
             rect_top_draw = h - self.player.pitch - pos_z;
         }
         for y in 0..(rect_top_draw + self.player.pitch + pos_z) as usize {
-            //let current_dist = (self.player.planedist-2.0*self.player.jump) / (-2.0 * (y as f32 - self.player.pitch) + h);
             let current_dist = self.buffer_floors[y];
             let weight = current_dist / (self.intersections.distances[j]);
 
@@ -575,11 +588,13 @@ impl MainState {
                 [ftx, fty],
                 y,
                 RAYSPERPIXEL,
-                self.lighting.get_lighting_floor(
-                    ftx as f32 / 128.0,
-                    fty as f32 / 128.0,
-                    current_floor_x as usize + current_floor_y as usize * self.map_size.0,
-                ), //num::clamp(3.5 / (current_dist * current_dist), 0.2, 1.2),
+                self.torch.intensity
+                    * self.lighting.get_lighting_floor(
+                        ftx as f32 / 128.0,
+                        fty as f32 / 128.0,
+                        current_floor_x as usize + current_floor_y as usize * self.map_size.0,
+                    ),
+                num::clamp(3.0 / (current_dist * current_dist), 0.0, 1.5),
             );
         }
         /*
@@ -602,12 +617,12 @@ impl MainState {
     }
 }
 impl EventHandler for MainState {
-    fn key_down_event(&mut self,ctx: &mut Context,keycode: KeyCode,_: KeyMods,_: bool){
-        match keycode{
-            KeyCode::L=>self.lighting.switch=!self.lighting.switch,
-            KeyCode::K=>self.lighting.smooth_switch = !self.lighting.smooth_switch,
-            KeyCode::Escape=>ggez::event::quit(ctx),
-            _=>()
+    fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _: KeyMods, _: bool) {
+        match keycode {
+            KeyCode::L => self.lighting.switch = !self.lighting.switch,
+            KeyCode::K => self.lighting.smooth_switch = !self.lighting.smooth_switch,
+            KeyCode::Escape => ggez::event::quit(ctx),
+            _ => (),
         }
     }
     fn update(&mut self, ctx: &mut Context) -> GameResult {
@@ -629,12 +644,7 @@ impl EventHandler for MainState {
             }
         });
 
-        
-        /*self.lighting = lighting::Lighting::new(
-            vec![2 + self.map_size.0 * 3, 14 + self.map_size.0 * 7, 8 + self.map_size.0 * 24],
-            &self.map.solid,
-            self.map_size,
-        );*/
+        self.torch.update_intensity(self.time);
 
         Ok(())
     }
@@ -660,10 +670,12 @@ impl EventHandler for MainState {
 
         (0..h as usize).for_each(|y| {
             if y < (self.player.pitch + h * 0.5) as usize {
+                // Calculate ceiling y buffer
                 self.buffer_floors[y] = (self.player.planedist - 2.0 * self.player.jump)
                     / (-2.0 * (y as f32 - self.player.pitch) + h);
             }
             if y > (h * 0.5 + self.player.pitch) as usize {
+                // Calculate floor y buffer
                 self.buffer_floors[y] = (self.player.planedist + 2.0 * self.player.jump)
                     / (2.0 * (-self.player.pitch + y as f32) - h);
             }
@@ -681,7 +693,7 @@ impl EventHandler for MainState {
         let mut img_arr = std::mem::take(&mut self.screen.img_arr);
 
         img_arr
-            .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
+            .chunks_mut(h as usize * 4 * RAYSPERPIXEL)
             .enumerate()
             .for_each(|(j, slice)| self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h));
 

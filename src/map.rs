@@ -43,7 +43,7 @@ impl Map {
         player: &Player,
     ) -> GameResult {
         let (_w, h) = graphics::drawable_size(ctx);
-        graphics::draw(ctx, &self.minimap, DrawParam::default().dest([0.0, 525.0]))?;
+        graphics::draw(ctx, &self.minimap, DrawParam::default().dest([0.0, 780.0]))?;
         let mut left = player.pos.x - 8.0;
         if left < 0.0 {
             left = 0.0;
@@ -150,7 +150,7 @@ pub fn read_map_walls(
         .chunks(4)
         .enumerate()
         .map(|(i, color)| match color {
-            [255, 255, 0, 255] => 1,
+            [255, 255, 0, 255] => 8,
             [0, 0, 0, 255] => 2,
             [0, 0, 255, 255] => 3,
             [255, 0, 0, 255] => 4,

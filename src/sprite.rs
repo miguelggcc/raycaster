@@ -87,7 +87,7 @@ impl Sprite {
                 if self.stype == SpriteType::Torch as usize {
                     1.0
                 } else {
-                    num::clamp(19.0 / self.distance2, 0.2, 1.0)
+                    num::clamp(5.0 / self.distance2, 0.2, 1.0)
                 }
             };
         } else {
@@ -131,7 +131,7 @@ impl Sprite {
 
                 sprite_rotation -= 7;
             } else if self.stype == SpriteType::Torch as usize {
-                sprite_rotation = (self.time % 1.0 * 8.0) as usize;
+                sprite_rotation = (self.time * 1.1 % 1.0 * 8.0) as usize;
             }
             if sprite_rotation > 7 {
                 sprite_rotation = 0;

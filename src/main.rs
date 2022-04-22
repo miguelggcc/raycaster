@@ -5,7 +5,7 @@ use raycaster::MainState;
 const TITLE: &str = "RayCaster";
 
 fn main() -> GameResult {
-    let window_mode = WindowMode::default().dimensions(1200.0, 800.0);
+    let window_mode = WindowMode::default().dimensions(1920.0, 1080.0);
     let window_setup = WindowSetup::default().title(TITLE);
     let (mut ctx, events_loop) = ContextBuilder::new(TITLE, "migue")
         .window_mode(window_mode)
