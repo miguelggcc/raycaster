@@ -96,7 +96,7 @@ impl MainState {
         let mut sb = graphics::spritebatch::SpriteBatch::new(skyimg);
         let idx = sb.add(DrawParam::default());
         let sky = Sky { sb, idx };
-        let intersections = Intersections::new();
+        let intersections = Intersections::new(w as usize);
 
         let wall_textures = graphics::Image::new(ctx, "/wall128.png")?.to_rgba8(ctx)?;
 
@@ -591,9 +591,8 @@ impl MainState {
                         current_floor_x as usize + current_floor_y as usize * self.map_size.0,
                     ),
                 (3.0 / (current_dist * current_dist)).min(1.5),
-            );               
-             //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
-
+            );
+            //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
         }
 
         self.sprites.iter().for_each(|sprite| {
@@ -685,7 +684,7 @@ impl EventHandler for MainState {
         let mut img_arr = std::mem::take(&mut self.screen.img_arr);
 
         img_arr
-            .chunks_mut(h as usize * 4 * RAYSPERPIXEL)
+            .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
             .enumerate()
             .for_each(|(j, slice)| self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h));
 
@@ -735,21 +734,15 @@ pub struct Intersections {
     wall_type: Vec<usize>,
 }
 
-impl Default for Intersections {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Intersections {
-    pub fn new() -> Self {
+    pub fn new(w:usize) -> Self {
         Self {
-            points: vec![[0.0, 0.0]; 1200],
-            distances: vec![0.0; 1200],
-            distance_fisheye: vec![0.0; 1200],
-            map_checkv: vec![0; 1200],
-            orientation: vec![Orientation::N; 1200],
-            wall_type: vec![0; 1200],
+            points: vec![[0.0, 0.0]; w/RAYSPERPIXEL],
+            distances: vec![0.0; w/RAYSPERPIXEL],
+            distance_fisheye: vec![0.0; w/RAYSPERPIXEL],
+            map_checkv: vec![0; w/RAYSPERPIXEL],
+            orientation: vec![Orientation::N; w/RAYSPERPIXEL],
+            wall_type: vec![0; w/RAYSPERPIXEL],
         }
     }
 }
