@@ -2,6 +2,8 @@ use rand::Rng;
 
 use crate::Orientation;
 use std::collections::VecDeque;
+use simdeez::sse2::*;
+use simdeez::sse41::*;
 
 pub struct Lighting {
     vertices: Vec<Vertex>,
@@ -35,21 +37,21 @@ impl Lighting {
             vertices,
             lighting,
             map_size,
-            switch: false,
+            switch: true,
             smooth_switch: true,
         }
     }
     pub fn get_lighting_floor(&self, x: f32, y: f32, pos: usize) -> f32 {
-        let (tl, tr, bl, br) = get_vertices(pos, &self.vertices);
-        if !self.switch {
+        if self.switch {        
+            let (tl, tr, bl, br) = get_vertices(pos, &self.vertices);
             if self.smooth_switch {
-                bilerp(
+                bilerp_compiletime(
                     x,
                     1.0 - y,
-                    tl.lighting,
-                    tr.lighting,
-                    bl.lighting,
+                    &[bl.lighting,
                     br.lighting,
+                    tl.lighting,
+                    tr.lighting,]
                 )
             } else {
                 self.lighting[pos]
@@ -60,31 +62,31 @@ impl Lighting {
     }
 
     pub fn get_lighting_wall(&self, x: f32, y: f32, pos: usize, orientation: &Orientation) -> f32 {
-        if !self.switch {
+        if self.switch {
             if self.smooth_switch {
                 match orientation {
                     Orientation::N => {
                         let location = pos - self.map_size.0;
                         let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
                         if y > 2.0 {
-                            bilerp(
+                            bilerp_compiletime(
                                 1.0 - x,
                                 3.0 - y,
-                                tl.lighting,
-                                tr.lighting,
-                                bl.lighting,
+                                &[bl.lighting,
                                 br.lighting,
+                                tl.lighting,
+                                tr.lighting,]
                             )
                         } else if y > 1.0 {
                             lerp(1.0 - x, tl.lighting, tr.lighting)
                         } else {
-                            bilerp(
+                            bilerp_compiletime(
                                 1.0 - x,
                                 1.0 - y,
-                                bl.lighting,
-                                br.lighting,
-                                tl.lighting,
+                                &[tl.lighting,
                                 tr.lighting,
+                                bl.lighting,
+                                br.lighting,]
                             )
                         }
                     }
@@ -92,24 +94,24 @@ impl Lighting {
                         let location = pos + self.map_size.0;
                         let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
                         if y > 2.0 {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 3.0 - y,
-                                bl.lighting,
-                                br.lighting,
-                                tl.lighting,
+                                &[tl.lighting,
                                 tr.lighting,
+                                bl.lighting,
+                                br.lighting,]
                             )
                         } else if y > 1.0 {
                             lerp(x, bl.lighting, br.lighting)
                         } else {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 1.0 - y,
-                                tl.lighting,
-                                tr.lighting,
-                                bl.lighting,
+                                &[bl.lighting,
                                 br.lighting,
+                                tl.lighting,
+                                tr.lighting,]
                             )
                         }
                     }
@@ -117,24 +119,24 @@ impl Lighting {
                         let location = pos - 1;
                         let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
                         if y > 2.0 {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 3.0 - y,
-                                tl.lighting,
-                                bl.lighting,
-                                tr.lighting,
+                                &[tr.lighting,
                                 br.lighting,
+                                tl.lighting,
+                                bl.lighting,]
                             )
                         } else if y > 1.0 {
                             lerp(x, tl.lighting, bl.lighting)
                         } else {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 1.0 - y,
-                                tr.lighting,
-                                br.lighting,
-                                tl.lighting,
+                                &[tl.lighting,
                                 bl.lighting,
+                                tr.lighting,
+                                br.lighting,]
                             )
                         }
                     }
@@ -142,24 +144,24 @@ impl Lighting {
                         let location = pos + 1;
                         let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
                         if y > 2.0 {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 3.0 - y,
-                                br.lighting,
-                                tr.lighting,
-                                bl.lighting,
+                                &[bl.lighting,
                                 tl.lighting,
+                                br.lighting,
+                                tr.lighting,]
                             )
                         } else if y > 1.0 {
                             lerp(x, br.lighting, tr.lighting)
                         } else {
-                            bilerp(
+                            bilerp_compiletime(
                                 x,
                                 1.0 - y,
-                                bl.lighting,
-                                tl.lighting,
-                                br.lighting,
+                                &[br.lighting,
                                 tr.lighting,
+                                bl.lighting,
+                                tl.lighting]
                             )
                         }
                     }
@@ -242,15 +244,24 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     light
 }
 
-fn bilerp(x: f32, y: f32, tl: f32, tr: f32, bl: f32, br: f32) -> f32 {
+simd_compiletime_generate!(
+fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
     let x2 = 1.0 - x;
     let y2 = 1.0 - y;
-    let l1 = bl * x2 * y2;
+    /*let l1 = bl * x2 * y2;
     let l2 = br * x * y2;
     let l3 = tl * y * x2;
     let l4 = tr * x * y;
-    l1 + l2 + l3 + l4
-}
+    l1 + l2 + l3 + l4*/
+    let a2 = [x2,x,y,x];
+    let a3 = [y2,y2,x2,y];
+    let v_a1 = S::loadu_ps(&vertices[0]);//[bottom left,bottom right, top left, top right]
+    let v_a2 = S::loadu_ps(&a2[0]);
+    let v_a3 = S::loadu_ps(&a3[0]);
+
+    S::horizontal_add_ps(v_a1*v_a2*v_a3)
+});
+
 fn lerp(x: f32, l: f32, r: f32) -> f32 {
     let x2 = 1.0 - x;
     l * x2 + x * r
