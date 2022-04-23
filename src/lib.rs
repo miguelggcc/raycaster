@@ -758,12 +758,3 @@ pub struct Sky {
     sb: graphics::spritebatch::SpriteBatch,
     idx: graphics::spritebatch::SpriteIdx,
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
-}
