@@ -13,6 +13,8 @@ pub struct Screen {
     sprite_textures: Vec<u8>,
     length_textures: usize,
     length_sprites: usize,
+    shade_col: [f32; 4],
+    flashlight_col: [f32; 4],
 }
 
 impl Screen {
@@ -30,6 +32,8 @@ impl Screen {
             sprite_textures: Vec::new(),
             length_textures,
             length_sprites,
+            shade_col: [1.5, 1.1, 0.6, 1.0],
+            flashlight_col: [1.0, 0.9, 0.8, 1.0],
         }
     }
 
@@ -58,16 +62,13 @@ impl Screen {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
         (0..width_rect).for_each(|i| {
             // draws in rectangles of 1xwidth_rect size
-            if pos + 4 > self.wall_textures.len() {
-                dbg!(texture_position, pixel_height);
-            }
             let mut pixel: [u8; 4] = self.wall_textures[pos..pos + 4].try_into().unwrap(); //rgba pixel
 
-                pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight)) as u8;
-                pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
-                pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;
+            pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
+            pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
+            pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;
 
-                self.draw_pixel(img_arr, i * self.width + pixel_height, &pixel);
+            self.draw_pixel(img_arr, i * self.width + pixel_height, &pixel);
         });
     }
 

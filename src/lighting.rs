@@ -165,12 +165,11 @@ impl Lighting {
                     }
                 }
             } else {
-                let location=
-                match orientation {
-                    Orientation::N =>  pos - self.map_size.0,
-                    Orientation::S =>  pos + self.map_size.0,
-                    Orientation::E =>  pos - 1,
-                    Orientation::W =>  pos + 1,
+                let location = match orientation {
+                    Orientation::N => pos - self.map_size.0,
+                    Orientation::S => pos + self.map_size.0,
+                    Orientation::E => pos - 1,
+                    Orientation::W => pos + 1,
                 };
 
                 self.lighting[location]
@@ -199,18 +198,22 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
         //negative x neighbor
         if x > 0 {
             let neighbor = x - 1 + y * map_size.0;
-            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 0 &&  light_node != 1 {
-                    light_int[neighbor] = light_node - 1;
-                    lightq.push_back(neighbor);
-                }
+            if !map[neighbor]
+                && light_int[neighbor] <= light_node - 2
+                && light_node != 0
+                && light_node != 1
+            {
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
+            }
         }
 
         //Positive x neighbor
         if x < map_size.0 - 1 {
             let neighbor = x + 1 + y * map_size.0;
-            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1{
-                    light_int[neighbor] = light_node - 1;
-                    lightq.push_back(neighbor);
+            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
             }
         }
 
@@ -218,17 +221,17 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
         if y > 0 {
             let neighbor = x + (y - 1) * map_size.0;
             if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
-                    light_int[neighbor] = light_node - 1;
-                    lightq.push_back(neighbor);
-                }
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
+            }
         }
 
         //Positive y neighbor
         if y < map_size.1 - 1 {
             let neighbor = x + (y + 1) * map_size.0;
-            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1{
-                    light_int[neighbor] = light_node - 1;
-                    lightq.push_back(neighbor);
+            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
             }
         }
     }

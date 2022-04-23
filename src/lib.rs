@@ -234,8 +234,7 @@ impl MainState {
                 self.player.height -= 30.0;
             }
         } else if self.player.height < 0.0 {
-                self.player.height += 30.0;
-            
+            self.player.height += 30.0;
         }
 
         if is_key_pressed(ctx, KeyCode::Q) {
@@ -521,16 +520,13 @@ impl MainState {
                 self.torch.intensity
                     * self.lighting.get_lighting_wall(
                         tx / 128.0,
-                        ty * 0.0234375, //*3/128
+                        ty * 0.0234375, //*3.0/128.0
                         self.intersections.map_checkv[j],
                         &self.intersections.orientation[j],
                     ),
-                num::clamp(
-                    3.0 / (self.intersections.distance_fisheye[j]
-                        * self.intersections.distance_fisheye[j]),
-                    0.0,
-                    1.5,
-                ),
+                (3.0 / (self.intersections.distance_fisheye[j]
+                    * self.intersections.distance_fisheye[j]))
+                    .min(1.5),
             );
             ty += ty_step;
         }
@@ -563,7 +559,7 @@ impl MainState {
                     y,
                     RAYSPERPIXEL,
                     self.torch.intensity * lighting,
-                    num::clamp(3.0 / (current_dist * current_dist), 0.0, 1.5),
+                    (3.0 / (current_dist * current_dist)).min(1.5),
                 )
             }
         }
@@ -594,15 +590,11 @@ impl MainState {
                         fty as f32 / 128.0,
                         current_floor_x as usize + current_floor_y as usize * self.map_size.0,
                     ),
-                num::clamp(3.0 / (current_dist * current_dist), 0.0, 1.5),
-            );
-        }
-        /*
+                (3.0 / (current_dist * current_dist)).min(1.5),
+            );               
+             //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
 
-            for k in 0..rect_w {
-                self.screen.draw_pixel(slice, k, y as usize, &[0, 0, 0, 0]);
-            }
-        }*/
+        }
 
         self.sprites.iter().for_each(|sprite| {
             sprite.draw(
