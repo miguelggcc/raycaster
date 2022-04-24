@@ -1,4 +1,5 @@
 use std::{collections::HashMap, path::Path};
+use crate::door::Door;
 
 use ggez::{
     graphics::{self, DrawParam, Image, Rect},
@@ -178,36 +179,6 @@ pub fn read_map_floors(ctx: &mut Context, path: &Path) -> GameResult<Vec<usize>>
         .map(|r| if r == 0 { 1 } else { 0 })
         .collect();
     Ok(floors)
-}
-
-pub struct Door {
-    pub offset: f32,
-    pub opening: bool,
-    pub timer: f32,
-    pub pos: usize,
-}
-
-impl Door {
-    pub fn new(offset: f32, opening: bool, timer: f32, pos: usize) -> Self {
-        Self {
-            offset,
-            opening,
-            timer,
-            pos,
-        }
-    }
-
-    pub fn update(&mut self, time: f32, trigger_time: f32, solid: &mut Vec<bool>) {
-        if time - self.timer > trigger_time {
-            self.timer = 0.0;
-            if self.offset > 0.001 {
-                self.offset -= 0.01;
-            } else {
-                self.opening = false;
-                solid[self.pos] = false;
-            }
-        }
-    }
 }
 
 fn get_drawparam(

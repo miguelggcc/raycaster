@@ -196,7 +196,7 @@ impl Default for Bounds {
         Self::new(0.0, 0.0, 0.0, 0.0, 0.0, vec![], 0.0)
     }
 }
-#[allow(dead_code)] 
+#[allow(dead_code)]
 pub enum SpriteType {
     Armor = 0,
     CandleHolder = 1,

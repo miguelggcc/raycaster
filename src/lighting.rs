@@ -239,11 +239,10 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     }
     let mut light = Vec::new();
     for i in light_int {
-        light.push(0.75f32.powf(0.8 * (15 - i) as f32));
+        light.push(0.7f32.powf(0.8 * (15 - i) as f32));
     }
     light
 }
-
 simd_compiletime_generate!(
 fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
     let x2 = 1.0 - x;
@@ -349,7 +348,7 @@ impl Torch {
                         rand::thread_rng().gen_range(80.0 / 1000.0..800.0 / 1000.0);
                     self.timer = timer;
                 } else {
-                    self.intensity += 0.01;
+                    self.intensity += 0.005;
                 }
             }
             1 => {
@@ -366,7 +365,7 @@ impl Torch {
                     self.flicker_r_pause = rand::thread_rng().gen_range(0.04..0.14);
                     self.timer = timer;
                 } else {
-                    self.intensity -= 0.015;
+                    self.intensity -= 0.008;
                 }
             }
             _ => {

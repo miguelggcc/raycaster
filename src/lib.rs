@@ -10,6 +10,7 @@ mod player;
 mod screen;
 mod sprite;
 mod utilities;
+mod door;
 use lighting::{Lighting, Torch};
 use map::Map;
 use num::clamp;
@@ -37,7 +38,6 @@ pub struct MainState {
     intersections: Intersections,
     screen: Screen,
     sprites: Vec<Sprite>,
-    time: f32,
     lighting: Lighting,
     torch: Torch,
 }
@@ -136,7 +136,6 @@ impl MainState {
             intersections,
             screen,
             sprites,
-            time: 0.0,
             lighting,
             torch,
         })
@@ -223,7 +222,7 @@ impl MainState {
             if self.map.walls[pos_door] == 6 {
                 let door = self.map.doors.get_mut(&pos_door).expect("Cant find door");
                 if !door.opening {
-                    door.timer = self.time;
+                    door.timer = timer::time_since_start(ctx).as_secs_f32();
                     door.opening = true;
                 }
             }
@@ -581,7 +580,7 @@ impl MainState {
 
             self.screen.draw_texture(
                 slice,
-                [ftx, fty],
+                [ftx, 1152+fty],
                 y,
                 RAYSPERPIXEL,
                 self.torch.intensity
@@ -617,25 +616,27 @@ impl EventHandler for MainState {
         }
     }
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        self.time += timer::delta(ctx).as_secs_f32();
+        let time = timer::time_since_start(ctx).as_secs_f32();
+        let dt = ggez::timer::delta(ctx).as_secs_f32();
+
         self.handle_input(ctx, self.player.dir_norm);
 
-        self.player.walk_animation(&self.buffer_walking, self.time);
+        self.player.walk_animation(&self.buffer_walking, time);
 
         for j in 0..self.angles.len() {
             self.calculate_ray(self.player.dir_norm, self.angles[j], j)?;
         }
         self.sprites
             .iter_mut()
-            .for_each(|sprite| sprite.update(self.time));
+            .for_each(|sprite| sprite.update(time));
 
         self.map.doors.iter_mut().for_each(|(_, d)| {
             if d.opening {
-                d.update(self.time, 0.01, &mut self.map.solid)
+                d.update(dt, &mut self.map.solid)
             }
         });
 
-        self.torch.update_intensity(self.time);
+        self.torch.update_intensity(time);
 
         Ok(())
     }
