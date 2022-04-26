@@ -49,7 +49,7 @@ impl MainState {
         let pos = Vector2::new(8.5, 12.5);
         let dir_norm = Vector2::new(0.0f32, -1.0); // Player direction
         let plane = Vector2::new((FOV.to_radians() * 0.5).tan(), 0.0); //Camera plane vector
-        let map_size = (16, 25);
+        let map_size = (33, 25);
         let cell_size = 128.0;
         let minimap = graphics::Image::new(ctx, "/minimap.png")?;
         let minimap_sb =
@@ -70,7 +70,7 @@ impl MainState {
             plane,
             (w * 0.5) / ((FOV.to_radians() * 0.5).tan()), //distance from the player to the projection plane
             0.0,
-            0.0,
+            150.0,
         )?;
 
         set_mouse_location(ctx, Vector2::new(w * 0.5, h * 0.5)).unwrap();
@@ -106,18 +106,37 @@ impl MainState {
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![
-            Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
-            Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
+            /*Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
+            //Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
             //Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
-            Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 15.0 - 0.048)),
+            //Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
+            //Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 15.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.5, 24.0 - 0.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.048, 12.0)),
-            Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(2.048, 3.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(16.0-0.048, 6.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.5, 24.0-0.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(24.5, 1.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(30.5, 1.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(22.048, 8.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(27.0-0.048, 8.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0-0.048, 8.5)),
+
+            Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),*/
         ];
 
         let lighting = lighting::Lighting::new(
-            vec![1 + map_size.0 * 3, 14 + map_size.0 * 7, 8 + map_size.0 * 23],
+            vec![2 + map_size.0 * 3,
+            15 + map_size.0 * 6,
+            8 + map_size.0 * 23,
+            28 + map_size.0 * 23,
+            24 + map_size.0 * 1,
+            30 + map_size.0 * 1,
+            22 + map_size.0*8,
+            26 + map_size.0*8,
+            28 + map_size.0*8,
+            31 + map_size.0*8,
+            ],
             &map.solid,
             map_size,
         );
@@ -232,7 +251,7 @@ impl MainState {
             if self.player.height > -300.0 {
                 self.player.height -= 30.0;
             }
-        } else if self.player.height < 0.0 {
+        } else if self.player.height < 150.0 {
             self.player.height += 30.0;
         }
 
@@ -379,11 +398,11 @@ impl MainState {
                 }
                 if ((orientation == Orientation::W || orientation == Orientation::E)
                     && self.map.walls
-                        [startv.y as usize * self.map_size.0 + (map_checkv.x - stepv.x) as usize]
+                        [map_checkv.y as usize * self.map_size.0 + (map_checkv.x - stepv.x) as usize]
                         == 6)
                     || ((orientation == Orientation::N || orientation == Orientation::S)
                         && self.map.walls[(map_checkv.y - stepv.y) as usize * self.map_size.0
-                            + startv.x as usize]
+                            + map_checkv.x as usize]
                             == 6)
                 {
                     wall_type = 7;
@@ -405,7 +424,7 @@ impl MainState {
         Ok(())
     }
 
-    fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
+ fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
         let rect_h =
             (self.player.planedist / (self.intersections.distances[j]) * 100.0).round() / 100.0;
         let rect_top = (h - rect_h) * 0.5;

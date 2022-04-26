@@ -12,7 +12,7 @@ pub struct Screen {
     img_arr_len: usize,
     width: usize,
     height: usize,
-    wall_textures: Vec<i32>,
+    wall_textures: Vec<f32>,
     sprite_textures: Vec<u8>,
     length_textures: usize,
     length_sprites: usize,
@@ -41,7 +41,7 @@ impl Screen {
     }
 
     pub fn textures(&mut self, wall_textures: Vec<u8>, sprite_textures: Vec<u8>) {
-        self.wall_textures =wall_textures.iter().map(|&p| p as i32).collect();
+        self.wall_textures =wall_textures.iter().map(|&p| p as f32).collect();
         self.sprite_textures = sprite_textures;
     }
     #[allow(dead_code)]
@@ -49,7 +49,7 @@ impl Screen {
         self.img_arr = vec![0; (self.width * self.height) * 4];
     }
 
-    pub fn arr_to_rgba(&mut self, ctx: &mut Context) -> GameResult<ImageGeneric<GlBackendSpec>> {
+    pub fn arr_to_rgba(&self, ctx: &mut Context) -> GameResult<ImageGeneric<GlBackendSpec>> {
         Image::from_rgba8(ctx, self.width as u16, self.height as u16, &self.img_arr)
     }
     pub fn draw_texture(
@@ -110,14 +110,14 @@ impl Screen {
 }
 simd_compiletime_generate!(
     fn color_pixel(
-        pixel: &[i32],
+        pixel: &[f32],
         shade: &[f32],
         flashlight: &[f32],
         shade_col: &[f32],
         flashlight_col: &[f32],
     ) -> [i32; 8] {
-        let  v_pixel = S::loadu_epi32(&pixel[0]);
-        let v_pixel_f = S::cvtepi32_ps(v_pixel);
+        //let  v_pixel = S::loadu_epi32(&pixel[0]);
+        let v_pixel_f = S::loadu_ps(&pixel[0]);
         let v_shade = S::loadu_ps(&shade[0]);
         let v_flashlight = S::loadu_ps(&flashlight[0]);
         let v_shade_col = S::loadu_ps(&shade_col[0]);

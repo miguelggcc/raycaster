@@ -65,7 +65,7 @@ impl Map {
         let mut sprite_offset;
         for i in left as usize..(right).ceil() as usize {
             for j in top as usize..bottom.floor() as usize {
-                if self.walls[i + map_size.0 * j] > 0 {
+                if self.solid[i + map_size.0 * j] {
                     sprite_offset = 0.0;
                 } else {
                     sprite_offset = 0.5;
