@@ -62,7 +62,6 @@ impl Screen {
         flashlight: f32,
     ) {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
-        (0..width_rect).for_each(|i| {
             // draws in rectangles of 1xwidth_rect size
                 let p = color_pixel_compiletime(
                     &self.wall_textures[pos..pos+4],
@@ -75,8 +74,7 @@ impl Screen {
                 pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
                 pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
                 let p_int = [p[0] as u8, p[1] as u8, p[2] as u8,  p[3] as u8];
-                self.draw_pixel(img_arr, i * self.width + pixel_height, &p_int);
-        });
+                self.draw_pixel(img_arr,  pixel_height, &p_int);
     }
 
     pub fn draw_sprite(

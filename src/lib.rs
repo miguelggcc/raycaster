@@ -106,7 +106,7 @@ impl MainState {
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![
-            /*Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
+            Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
             //Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
             //Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
             //Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
@@ -122,7 +122,7 @@ impl MainState {
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0-0.048, 8.5)),
 
-            Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),*/
+            Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
         ];
 
         let lighting = lighting::Lighting::new(
@@ -706,8 +706,13 @@ impl EventHandler for MainState {
         img_arr
             .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
             .enumerate()
-            .for_each(|(j, slice)| self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h));
-
+            .for_each(|(j, slice)| {self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h);
+                let (slice1, slice2) =  slice.split_at_mut(h as usize * 4);
+                slice2.chunks_mut(h as usize * 4).for_each(|sub_slice2|  sub_slice2.copy_from_slice(&slice1))
+               });
+        /*img_arr.par_chunks_mut(h as usize * 4 * RAYSPERPIXEL). for_each(|slice|{
+            let (slice1, slice2) =  slice.split_at_mut(h as usize * 2 * RAYSPERPIXEL);
+        slice2.copy_from_slice(&slice1)});*/
         self.screen.img_arr = img_arr;
 
         let img = self.screen.arr_to_rgba(ctx)?;
