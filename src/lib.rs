@@ -4,13 +4,13 @@ use ggez::event::{EventHandler, KeyCode, KeyMods};
 use ggez::graphics::{self, Color, DrawParam};
 use ggez::input::keyboard::is_key_pressed;
 use ggez::{timer, Context, GameResult};
+mod door;
 mod lighting;
 mod map;
 mod player;
 mod screen;
 mod sprite;
 mod utilities;
-mod door;
 use lighting::{Lighting, Torch};
 use map::Map;
 use num::clamp;
@@ -113,29 +113,29 @@ impl MainState {
             //Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 15.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.5, 24.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(2.048, 3.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(16.0-0.048, 6.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.5, 24.0-0.048)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(16.0 - 0.048, 6.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.5, 24.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(24.5, 1.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(30.5, 1.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(22.048, 8.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(27.0-0.048, 8.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(27.0 - 0.048, 8.5)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0-0.048, 8.5)),
-
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0 - 0.048, 8.5)),
             Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
         ];
 
         let lighting = lighting::Lighting::new(
-            vec![2 + map_size.0 * 3,
-            15 + map_size.0 * 6,
-            8 + map_size.0 * 23,
-            28 + map_size.0 * 23,
-            24 + map_size.0 * 1,
-            30 + map_size.0 * 1,
-            22 + map_size.0*8,
-            26 + map_size.0*8,
-            28 + map_size.0*8,
-            31 + map_size.0*8,
+            vec![
+                2 + map_size.0 * 3,
+                15 + map_size.0 * 6,
+                8 + map_size.0 * 23,
+                28 + map_size.0 * 23,
+                24 + map_size.0 * 1,
+                30 + map_size.0 * 1,
+                22 + map_size.0 * 8,
+                26 + map_size.0 * 8,
+                28 + map_size.0 * 8,
+                31 + map_size.0 * 8,
             ],
             &map.solid,
             map_size,
@@ -393,12 +393,13 @@ impl MainState {
                             distance = ray_length1_d.y;
                         }
                     }
+                } else if wall_type == 10 {
                 } else if wall_type > 0 {
                     tilefound = true;
                 }
                 if ((orientation == Orientation::W || orientation == Orientation::E)
-                    && self.map.walls
-                        [map_checkv.y as usize * self.map_size.0 + (map_checkv.x - stepv.x) as usize]
+                    && self.map.walls[map_checkv.y as usize * self.map_size.0
+                        + (map_checkv.x - stepv.x) as usize]
                         == 6)
                     || ((orientation == Orientation::N || orientation == Orientation::S)
                         && self.map.walls[(map_checkv.y - stepv.y) as usize * self.map_size.0
@@ -424,7 +425,7 @@ impl MainState {
         Ok(())
     }
 
- fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
+    fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
         let rect_h =
             (self.player.planedist / (self.intersections.distances[j]) * 100.0).round() / 100.0;
         let rect_top = (h - rect_h) * 0.5;
@@ -534,7 +535,6 @@ impl MainState {
                 slice,
                 [tx as usize, wall_type * 128 + ty as usize],
                 y,
-                RAYSPERPIXEL,
                 self.torch.intensity
                     * self.lighting.get_lighting_wall(
                         tx / 128.0,
@@ -575,7 +575,6 @@ impl MainState {
                     slice,
                     [ftx, (floor_type * 128) + fty],
                     y,
-                    RAYSPERPIXEL,
                     self.torch.intensity * lighting,
                     (3.0 / (current_dist * current_dist)).min(1.5),
                 )
@@ -599,9 +598,8 @@ impl MainState {
 
             self.screen.draw_texture(
                 slice,
-                [ftx, 1152+fty],
+                [ftx, 1152 + fty],
                 y,
-                RAYSPERPIXEL,
                 self.torch.intensity
                     * self.lighting.get_lighting_floor(
                         ftx as f32 / 128.0,
@@ -706,10 +704,13 @@ impl EventHandler for MainState {
         img_arr
             .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
             .enumerate()
-            .for_each(|(j, slice)| {self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h);
-                let (slice1, slice2) =  slice.split_at_mut(h as usize * 4);
-                slice2.chunks_mut(h as usize * 4).for_each(|sub_slice2|  sub_slice2.copy_from_slice(&slice1))
-               });
+            .for_each(|(j, slice)| {
+                self.draw_slice(slice, w as usize / RAYSPERPIXEL - j - 1, h);
+                let (slice1, slice2) = slice.split_at_mut(h as usize * 4);
+                slice2
+                    .chunks_mut(h as usize * 4)
+                    .for_each(|sub_slice2| sub_slice2.copy_from_slice(&slice1))
+            });
         /*img_arr.par_chunks_mut(h as usize * 4 * RAYSPERPIXEL). for_each(|slice|{
             let (slice1, slice2) =  slice.split_at_mut(h as usize * 2 * RAYSPERPIXEL);
         slice2.copy_from_slice(&slice1)});*/
@@ -760,14 +761,14 @@ pub struct Intersections {
 }
 
 impl Intersections {
-    pub fn new(w:usize) -> Self {
+    pub fn new(w: usize) -> Self {
         Self {
-            points: vec![[0.0, 0.0]; w/RAYSPERPIXEL],
-            distances: vec![0.0; w/RAYSPERPIXEL],
-            distance_fisheye: vec![0.0; w/RAYSPERPIXEL],
-            map_checkv: vec![0; w/RAYSPERPIXEL],
-            orientation: vec![Orientation::N; w/RAYSPERPIXEL],
-            wall_type: vec![0; w/RAYSPERPIXEL],
+            points: vec![[0.0, 0.0]; w / RAYSPERPIXEL],
+            distances: vec![0.0; w / RAYSPERPIXEL],
+            distance_fisheye: vec![0.0; w / RAYSPERPIXEL],
+            map_checkv: vec![0; w / RAYSPERPIXEL],
+            orientation: vec![Orientation::N; w / RAYSPERPIXEL],
+            wall_type: vec![0; w / RAYSPERPIXEL],
         }
     }
 }

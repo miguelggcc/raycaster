@@ -1,5 +1,5 @@
-use std::{collections::HashMap, path::Path};
 use crate::door::Door;
+use std::{collections::HashMap, path::Path};
 
 use ggez::{
     graphics::{self, DrawParam, Image, Rect},

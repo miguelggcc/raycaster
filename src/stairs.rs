@@ -1,14 +1,14 @@
-pub struct Door {
-    pub offset: f32,
-    pub opening: bool,
-    pub timer: f32,
-    pub pos: usize,
+pub struct Stairs {
+    pub height: bool,
+    pub hit1: f32,
+    pub hit2: f32,
+    pub hit3: f32,
 }
 
 impl Door {
     pub fn new(offset: f32, opening: bool, timer: f32, pos: usize) -> Self {
         Self {
-            offset,
+            height,
             opening,
             timer,
             pos,

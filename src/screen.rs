@@ -41,7 +41,7 @@ impl Screen {
     }
 
     pub fn textures(&mut self, wall_textures: Vec<u8>, sprite_textures: Vec<u8>) {
-        self.wall_textures =wall_textures.iter().map(|&p| p as f32).collect();
+        self.wall_textures = wall_textures.iter().map(|&p| p as f32).collect();
         self.sprite_textures = sprite_textures;
     }
     #[allow(dead_code)]
@@ -57,24 +57,23 @@ impl Screen {
         img_arr: &mut [u8],
         texture_position: [usize; 2],
         pixel_height: usize,
-        width_rect: usize,
         shade: f32,
         flashlight: f32,
     ) {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
-            // draws in rectangles of 1xwidth_rect size
-                let p = color_pixel_compiletime(
-                    &self.wall_textures[pos..pos+4],
-                    &[shade, shade, shade, 1.0],
-                    &[flashlight, flashlight, flashlight, 1.0],
-                    &self.shade_col,
-                    &self.flashlight_col,
-                );
-                /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
-                pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
-                pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
-                let p_int = [p[0] as u8, p[1] as u8, p[2] as u8,  p[3] as u8];
-                self.draw_pixel(img_arr,  pixel_height, &p_int);
+                                                                                           // draws in rectangles of 1xwidth_rect size
+        let p = color_pixel_compiletime(
+            &self.wall_textures[pos..pos + 4],
+            &[shade, shade, shade, 1.0],
+            &[flashlight, flashlight, flashlight, 1.0],
+            &self.shade_col,
+            &self.flashlight_col,
+        );
+        /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
+        pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
+        pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
+        let p_int = [p[0] as u8, p[1] as u8, p[2] as u8, p[3] as u8];
+        self.draw_pixel(img_arr, pixel_height, &p_int);
     }
 
     pub fn draw_sprite(
@@ -122,7 +121,7 @@ simd_compiletime_generate!(
         let v_flashlight_col = S::loadu_ps(&flashlight_col[0]);
         let v_twofivefive = S::set1_epi32(255);
         let mut pixel_out = [0i32; 8];
-        let mut multiplicator = v_shade_col*v_shade + v_flashlight*v_flashlight_col;
+        let mut multiplicator = v_shade_col * v_shade + v_flashlight * v_flashlight_col;
         multiplicator *= v_pixel_f;
         let out = S::cvtps_epi32(multiplicator);
 
