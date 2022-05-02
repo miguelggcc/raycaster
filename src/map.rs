@@ -161,6 +161,18 @@ pub fn read_map_walls(
                 door_offset.insert(i, door);
                 6
             }
+            [0, 255, 255, 255] => {
+                can_pass[i] = false;
+                10
+            }
+            [0, 64, 255, 255] => {
+                can_pass[i] = false;
+                12
+            }
+            [0, 128, 255, 255] => {
+                can_pass[i] = false;
+                11
+            }
             _ => {
                 can_pass[i] = false;
                 0

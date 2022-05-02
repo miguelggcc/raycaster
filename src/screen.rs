@@ -54,26 +54,28 @@ impl Screen {
     }
     pub fn draw_texture(
         &self,
-        img_arr: &mut [u8],
+        slice: &mut [u8],
         texture_position: [usize; 2],
         pixel_height: usize,
         shade: f32,
         flashlight: f32,
     ) {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
-                                                                                           // draws in rectangles of 1xwidth_rect size
-        let p = color_pixel_compiletime(
-            &self.wall_textures[pos..pos + 4],
-            &[shade, shade, shade, 1.0],
-            &[flashlight, flashlight, flashlight, 1.0],
-            &self.shade_col,
-            &self.flashlight_col,
-        );
-        /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
-        pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
-        pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
-        let p_int = [p[0] as u8, p[1] as u8, p[2] as u8, p[3] as u8];
-        self.draw_pixel(img_arr, pixel_height, &p_int);
+        if self.wall_textures[pos + 3] == 255.0 {
+            let p = color_pixel_compiletime(
+                &self.wall_textures[pos..pos + 3],
+                &[shade, shade, shade, 1.0],
+                &[flashlight, flashlight, flashlight, 1.0],
+                &self.shade_col,
+                &self.flashlight_col,
+            );
+
+            /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
+            pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
+            pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
+            let p_int = [p[0] as u8, p[1] as u8, p[2] as u8, p[3] as u8];
+            slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&p_int);
+        }
     }
 
     pub fn draw_sprite(
@@ -81,24 +83,20 @@ impl Screen {
         slice: &mut [u8],
         texture_position: [usize; 2],
         pixel_height: usize,
-        width_rect: usize,
         shade: f32,
     ) {
         let pos = (texture_position[1] * self.length_sprites + texture_position[0]) << 2; //position of current pixel
-        (0..width_rect).for_each(|i| {
-            // draws in rectangles of 1xwidth_rect size
-            let mut pixel: [u8; 4] = self.sprite_textures[pos..pos + 4].try_into().unwrap(); //rgba pixel
-
-            if pixel[3] == 255 {
-                if shade != 1.0 && pixel != [255, 0, 0, 255] {
-                    //Draws shade depening of current lighting, darkening or brightening the pixel
-                    (0..3).for_each(|j| pixel[j] = (pixel[j] as f32 * shade) as u8);
-                }
-
-                //Doesn't draw transparent pixels
-                self.draw_pixel(slice, i * self.width + pixel_height, &pixel);
+                                                                                          // draws in rectangles of 1xwidth_rect size
+        let mut pixel: [u8; 4] = self.sprite_textures[pos..pos + 4].try_into().unwrap(); //rgba pixel
+                                                                                         //Doesn't draw transparent pixels
+        if pixel[3] == 255 {
+            if shade != 1.0 && pixel != [255, 0, 0, 255] {
+                //Draws shade depening of current lighting, darkening or brightening the pixel
+                (0..3).for_each(|j| pixel[j] = (pixel[j] as f32 * shade) as u8);
             }
-        });
+
+            slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&pixel);
+        }
     }
 
     pub fn draw_pixel(&self, img_arr: &mut [u8], pos: usize, pixel: &[u8; 4]) {

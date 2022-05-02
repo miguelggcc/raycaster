@@ -112,7 +112,6 @@ impl Sprite {
         j: usize,
         screen: &Screen,
         distance: f32,
-        rays_per_pixel: usize,
     ) {
         let stripe = j as f32;
 
@@ -150,7 +149,6 @@ impl Sprite {
                                 + self.bounds.sty[y - self.bounds.start_y as usize],
                         ],
                         y,
-                        rays_per_pixel,
                         self.shade,
                     );
                 }

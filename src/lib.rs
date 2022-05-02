@@ -35,7 +35,6 @@ pub struct MainState {
     buffer_floors: Vec<f32>,
     buffer_walking: Vec<f32>,
     sky: Sky,
-    intersections: Intersections,
     screen: Screen,
     sprites: Vec<Sprite>,
     lighting: Lighting,
@@ -96,7 +95,6 @@ impl MainState {
         let mut sb = graphics::spritebatch::SpriteBatch::new(skyimg);
         let idx = sb.add(DrawParam::default());
         let sky = Sky { sb, idx };
-        let intersections = Intersections::new(w as usize);
 
         let wall_textures = graphics::Image::new(ctx, "/wall128.png")?.to_rgba8(ctx)?;
 
@@ -152,7 +150,6 @@ impl MainState {
             buffer_floors,
             buffer_walking,
             sky,
-            intersections,
             screen,
             sprites,
             lighting,
@@ -256,20 +253,19 @@ impl MainState {
         }
 
         if is_key_pressed(ctx, KeyCode::Q) {
-            self.player.jump += 2.0;
+            self.player.jump += 10.0;
         }
 
         if is_key_pressed(ctx, KeyCode::E) {
-            self.player.jump -= 2.0;
+            self.player.jump -= 10.0;
         }
     }
 
     pub fn calculate_ray(
-        &mut self,
+        &self,
         ray_dir_player: Vector2<f32>,
         theta: f32,
-        j: usize,
-    ) -> GameResult {
+    ) -> (Intersection, Vec<Intersection>) {
         let ray_dir_norm = Vector2::rotate(ray_dir_player, theta);
         let ray_unitstep_size = Vector2::new(
             (1.0 + (ray_dir_norm.y / ray_dir_norm.x) * (ray_dir_norm.y / ray_dir_norm.x)).sqrt(),
@@ -279,7 +275,9 @@ impl MainState {
 
         let mut map_checkv = Vector2::new(startv.x.floor(), startv.y.floor());
         let mut ray_length1_d = Vector2::new(0.0f32, 0.0);
-        let mut orientation;
+        let mut orientation = Orientation::N;
+        let mut wall_type = 0;
+        let mut transparent_walls = vec![];
         let mut stepv = Vector2::new(0.0f32, 0.0);
         let mut last_was_door = false;
 
@@ -331,7 +329,7 @@ impl MainState {
                 && map_checkv.y >= 0.0
                 && map_checkv.y < self.map_size.1 as f32
             {
-                let mut wall_type =
+                wall_type =
                     self.map.walls[map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize];
 
                 if last_was_door && wall_type > 0 {
@@ -349,7 +347,7 @@ impl MainState {
 
                     tilefound = true;
                     if orientation == Orientation::N || orientation == Orientation::S {
-                        if ray_length1_d.y - 0.5 * ray_unitstep_size.y < ray_length1_d.x {
+                        if ray_length1_d.y - 0.5 * ray_unitstep_size.y <= ray_length1_d.x {
                             distance = ray_length1_d.y - ray_unitstep_size.y * 0.5;
 
                             if door_offset < 1.0 {
@@ -394,6 +392,36 @@ impl MainState {
                         }
                     }
                 } else if wall_type == 10 {
+                    let mut offset = 0.0;
+                    if ray_length1_d.y - 0.5 * ray_unitstep_size.y <= ray_length1_d.x {
+                        distance = ray_length1_d.y - ray_unitstep_size.y * 0.5;
+                    } else {
+                        if ray_dir_norm.x < 0.0 {
+                            orientation = Orientation::W;
+                            offset = -1.0;
+                        } else {
+                            orientation = Orientation::E;
+                            offset = 1.0;
+                        }
+                        distance = ray_length1_d.x;
+                    }
+                    transparent_walls.push(Intersection::new(
+                        (startv + ray_dir_norm * distance).to_array(),
+                        distance,
+                        (map_checkv.y) as usize * self.map_size.0
+                            + (map_checkv.x + offset) as usize,
+                        orientation.clone(),
+                        self.map.walls[(map_checkv.y) as usize * self.map_size.0
+                            + (map_checkv.x + offset) as usize],
+                    ));
+                } else if wall_type == 11 {
+                    transparent_walls.push(Intersection::new(
+                        (startv + ray_dir_norm * distance).to_array(),
+                        distance,
+                        (map_checkv.y) as usize * self.map_size.0 + (map_checkv.x) as usize,
+                        orientation.clone(),
+                        wall_type,
+                    ));
                 } else if wall_type > 0 {
                     tilefound = true;
                 }
@@ -409,49 +437,284 @@ impl MainState {
                     wall_type = 7;
                 }
                 if tilefound {
-                    let intersection = startv + ray_dir_norm * distance;
-                    self.intersections.points[j] = intersection.to_array();
-                    self.intersections.distance_fisheye[j] = distance;
-                    distance *= (theta).cos();
-
-                    self.intersections.distances[j] = distance;
-                    self.intersections.wall_type[j] = wall_type as usize;
-                    self.intersections.map_checkv[j] =
-                        map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize;
-                    self.intersections.orientation[j] = orientation;
+                    break;
                 }
             }
         }
-        Ok(())
+        let int_point = startv + ray_dir_norm * distance;
+        (
+            Intersection::new(
+                int_point.to_array(),
+                distance,
+                map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize,
+                orientation,
+                wall_type,
+            ),
+            transparent_walls,
+        )
     }
 
     fn draw_slice(&self, slice: &mut [u8], j: usize, h: f32) {
-        let rect_h =
-            (self.player.planedist / (self.intersections.distances[j]) * 100.0).round() / 100.0;
-        let rect_top = (h - rect_h) * 0.5;
-        let rect_bottom = (h + rect_h) * 0.5;
-        let ty_step = (self.cell_size) / rect_h;
-        let pos = self.intersections.points[j];
+        let (intersection, transparent_walls) =
+            self.calculate_ray(self.player.dir_norm, self.angles[j]);
 
-        let inter_x = pos[0] - pos[0].floor();
-        let inter_y = pos[1] - pos[1].floor();
+        let corrected_distance = intersection.distance * self.angles[j].cos();
+        let pos_z = self.player.jump / corrected_distance + self.player.pitch;
 
-        let wall_type = self.intersections.wall_type[j];
+        let rect_h = (self.player.planedist / corrected_distance * 100.0).round() / 100.0;
+        let rect_ceiling = (h - rect_h) * 0.5;
+        let rect_floor = (h + rect_h) * 0.5;
 
-        let pos_z = self.player.jump / (self.intersections.distances[j]);
+        self.draw_wall(slice, h, &intersection, h * 0.5, rect_h, &pos_z);
+
+        //draw floor
+        for y in (pos_z + rect_floor) as usize..(h) as usize {
+            if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 805) {
+                // Don't draw the floor behind the minimap image
+                let current_dist = self.buffer_floors[y]; // Use a buffer since they're always the same values
+                let weight = current_dist / corrected_distance;
+
+                let rhs = self.player.pos * (1.0 - weight);
+                let current_floor_x = weight * intersection.point[0] + rhs.x;
+                let current_floor_y = weight * intersection.point[1] + rhs.y;
+
+                let location =
+                    current_floor_x as usize + current_floor_y as usize * self.map_size.0;
+                let floor_type = self.map.floors[location];
+
+                let ftx = (current_floor_x * self.cell_size) as usize % 128;
+                let fty = (current_floor_y * self.cell_size) as usize % 128;
+                let lighting = self.lighting.get_lighting_floor(
+                    ftx as f32 / 128.0,
+                    fty as f32 / 128.0,
+                    location,
+                );
+                self.screen.draw_texture(
+                    slice,
+                    [ftx, (floor_type * 128) + fty],
+                    y,
+                    self.torch.intensity * lighting,
+                    (3.0 / (current_dist * current_dist)).min(1.5),
+                )
+            }
+        }
+        //draw ceiling
+        let mut rect_top_draw = rect_ceiling;
+        if rect_ceiling + pos_z > h {
+            rect_top_draw = h - pos_z;
+        }
+        for y in 0..(rect_top_draw + pos_z) as usize {
+            let current_dist = self.buffer_floors[y];
+            let weight = current_dist / corrected_distance;
+
+            let rhs = self.player.pos * (1.0 - weight);
+            let current_floor_x = weight * intersection.point[0] + rhs.x;
+            let current_floor_y = weight * intersection.point[1] + rhs.y;
+
+            let ftx = (current_floor_x * self.cell_size) as usize % 128;
+            let fty = (current_floor_y * self.cell_size) as usize % 128;
+
+            self.screen.draw_texture(
+                slice,
+                [ftx, 1152 + fty],
+                y,
+                self.torch.intensity
+                    * self.lighting.get_lighting_floor(
+                        ftx as f32 / 128.0,
+                        fty as f32 / 128.0,
+                        current_floor_x as usize + current_floor_y as usize * self.map_size.0,
+                    ),
+                (3.0 / (current_dist * current_dist)).min(1.5),
+            );
+            //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
+        }
+
+        transparent_walls.iter().for_each(|tw| {
+            let distance = tw.distance * self.angles[j].cos();
+            if tw.wall_type == 10 {
+                self.draw_wall(
+                    slice,
+                    h,
+                    &tw,
+                    h * 0.5,
+                    self.player.planedist / distance,
+                    &(self.player.pitch + self.player.jump / distance),
+                )
+            } else if tw.wall_type == 11 && tw.orientation == Orientation::E {
+                let m = (self.player.pos.y - tw.point[1]) / (self.player.pos.x - tw.point[0]); //slope of the line
+                let iy = m * (tw.point[0] + 1.0 / 4.0 - self.player.pos.x) + self.player.pos.y; // intersection y with the first step
+                let delta_distance =
+                    (1.0 / (4.0 * 4.0) + (iy - tw.point[1]) * (iy - tw.point[1])).sqrt(); // distance between steps
+
+                for i in (1..4).rev() {
+                    let tw2 = Intersection::new(
+                        [
+                            tw.point[0] + (i as f32) / 4.0,
+                            m * (tw.point[0] + (i as f32) / 4.0 - self.player.pos.x)
+                                + self.player.pos.y,
+                        ],
+                        tw.distance + delta_distance * (i as f32),
+                        tw.map_checkv,
+                        tw.orientation,
+                        11,
+                    );
+                    if tw2.point[1]>=0.0 && (tw2.point[1] as usize) <self.map_size.1{
+                    if self.map.walls
+                        [tw2.point[0] as usize + tw2.point[1] as usize * self.map_size.0]
+                        == 11
+                    {
+                        self.draw_wall(
+                            slice,
+                            h,
+                            &tw2,
+                            h * 0.5
+                                + self.player.planedist / (tw2.distance * self.angles[j].cos())
+                                    * ((3.0 - i as f32) / 8.0 + 1.0 / 16.0),
+                            1.0 / 8.0 * self.player.planedist
+                                / (tw2.distance * self.angles[j].cos()),
+                            &(self.player.pitch
+                                + self.player.jump / (tw2.distance * self.angles[j].cos())),
+                        );
+                        for y in (self.player.pitch
+                            + self.player.jump / (tw2.distance * self.angles[j].cos())
+                            + h * 0.5
+                            + self.player.planedist / (tw2.distance * self.angles[j].cos())
+                                * ((3.0 - i as f32) / 8.0 + 1.0 / 8.0))
+                            as usize
+                            ..(self.player.pitch
+                                + self.player.jump
+                                    / ((tw2.distance - delta_distance) * self.angles[j].cos())
+                                + h * 0.5
+                                + self.player.planedist
+                                    / ((tw2.distance - delta_distance) * self.angles[j].cos())
+                                    * ((4.0 - i as f32) / 8.0))
+                                as usize
+                        {
+                            let current_dist =  (self.player.planedist*(1.0-(i as f32)/4.0) + 2.0 * (self.player.jump))
+                            / (2.0 * (-self.player.pitch + y as f32) - (h));
+                            let weight = current_dist / corrected_distance;
+            
+                            let rhs = self.player.pos * (1.0 - weight);
+                            let current_floor_x = weight * intersection.point[0] + rhs.x;
+                            let current_floor_y = weight * intersection.point[1] + rhs.y;
+            
+            
+                            let ftx = (current_floor_x * self.cell_size) as usize % 128;
+                            let fty = (current_floor_y * self.cell_size) as usize % 128;
+                            /*let lighting = self.lighting.get_lighting_floor(
+                                ftx as f32 / 128.0,
+                                fty as f32 / 128.0,
+                                location,
+                            );*/
+                            self.screen.draw_texture(
+                                slice,
+                                [ftx, (0 * 128) + fty],
+                                y,
+                                0.2,
+                                (3.0 / (current_dist * current_dist)).min(1.5),
+                            )
+                        }
+                    } else {
+                        for y in (pos_z
+                            + h*0.5+rect_h*(4.0-i as f32)/8.0) as usize
+                            ..(self.player.pitch
+                                + self.player.jump
+                                    / ((tw2.distance - delta_distance) * self.angles[j].cos())
+                                + h * 0.5
+                                + self.player.planedist
+                                    / ((tw2.distance - delta_distance) * self.angles[j].cos())
+                                    * ((4.0 - i as f32) / 8.0)).min(h)
+                                as usize
+                        {
+                            //self.screen.draw_pixel(slice, y, &[0, 255, 0, 255]);
+                            let current_dist =  (self.player.planedist*(1.0-(i as f32)/4.0) + 2.0 * (self.player.jump))
+                            / (2.0 * (-self.player.pitch + y as f32) - (h)); // Use a buffer since they're always the same values
+                            let weight = current_dist / corrected_distance;
+            
+                            let rhs = self.player.pos * (1.0 - weight);
+                            let current_floor_x = weight * intersection.point[0] + rhs.x;
+                            let current_floor_y = weight * intersection.point[1] + rhs.y;
+            
+                            let ftx = (current_floor_x * self.cell_size) as usize % 128;
+                            let fty = (current_floor_y * self.cell_size) as usize % 128;
+                            /*let lighting = self.lighting.get_lighting_floor(
+                                ftx as f32 / 128.0,
+                                fty as f32 / 128.0,
+                                location,
+                            );*/
+                            self.screen.draw_texture(
+                                slice,
+                                [ftx, (0 * 128) + fty],
+                                y,
+                                0.2,
+                                (3.0 / (current_dist * current_dist)).min(1.5),
+                            )
+                        }
+                        
+                    }}
+                }
+                self.draw_wall(
+                    slice,
+                    h,
+                    &tw,
+                    h * 0.5 + self.player.planedist / distance * 7.0 / 16.0,
+                    1.0 / 8.0 * self.player.planedist / distance,
+                    &(self.player.pitch + self.player.jump / distance),
+                );
+            } else if tw.wall_type == 12 {
+            }
+        });
+
+        self.sprites.iter().for_each(|sprite| {
+            sprite.draw(slice, &self.player, j, &self.screen, corrected_distance)
+        });
+    }
+
+    fn draw_wall(
+        &self,
+        slice: &mut [u8],
+        h: f32,
+        intersection: &Intersection,
+        center: f32,
+        height: f32,
+        pos_z: &f32,
+    ) {
+        //TODO: REMOVE THIS IF
+        let ty_step = {
+            if intersection.wall_type == 11 {
+                (self.cell_size) / (8.0 * height)
+            } else {
+                (self.cell_size) / (height)
+            }
+        };
+
+        let inter_x = intersection.point[0] - intersection.point[0].floor();
+        let inter_y = intersection.point[1] - intersection.point[1].floor();
+
+        let rect_top = center - height * 0.5;
+        let rect_bottom = center + height * 0.5;
+
+        let rect_bottom_draw = {
+            if pos_z + rect_bottom >= h {
+                h - pos_z
+            } else {
+                rect_bottom
+            }
+        };
+
         //draw walls
         let mut ty = {
-            if rect_bottom - self.player.pitch - pos_z >= h {
-                (-self.player.pitch - pos_z - rect_top) * ty_step
-            } else if rect_top + self.player.pitch + pos_z < 0.0 {
-                (-self.player.pitch - pos_z - rect_bottom) * ty_step
+            if rect_top + pos_z <= 0.0 {
+                -(pos_z + rect_top) * ty_step
+            } else if rect_top + pos_z >= h {
+                -(pos_z + rect_bottom) * ty_step
             } else {
                 0.0
             }
         };
 
         let mut tx;
-        match self.intersections.orientation[j] {
+        match intersection.orientation {
             Orientation::N => {
                 tx = inter_x * self.cell_size;
                 tx = self.cell_size - 1.0 - tx.floor();
@@ -467,15 +730,15 @@ impl MainState {
                 tx = self.cell_size - 1.0 - tx.floor();
             }
         }
-        if wall_type == 6 {
+        if intersection.wall_type == 6 {
             let offset = 1.0
                 - self
                     .map
                     .doors
-                    .get(&self.intersections.map_checkv[j])
+                    .get(&intersection.map_checkv)
                     .expect("error to draw door")
                     .offset;
-            match self.intersections.orientation[j] {
+            match intersection.orientation {
                 Orientation::N => {
                     if inter_x < 0.5 {
                         tx -= offset * 64.0;
@@ -507,25 +770,16 @@ impl MainState {
             }
         }
 
-        let rect_bottom_draw = {
-            if self.player.pitch + pos_z + rect_bottom >= h {
-                h - self.player.pitch - pos_z
-            } else {
-                rect_bottom
-            }
-        };
-
-        for y in (self.player.pitch + pos_z + rect_top) as usize
-            ..(self.player.pitch + pos_z + rect_bottom_draw) as usize
-        {
+        for y in (pos_z + rect_top) as usize..(pos_z + rect_bottom_draw) as usize {
+            //TODO: FIX THIS FLOAT POINT ROUNDING ERROR
             if ty >= 128.0 {
                 dbg!(
-                    rect_h,
+                    height,
                     rect_top,
                     rect_bottom,
                     ty,
-                    self.player.pitch + pos_z + rect_top,
-                    self.player.pitch + pos_z + rect_bottom_draw,
+                    pos_z + rect_top,
+                    pos_z + rect_bottom_draw,
                     self.player.pitch
                 );
                 ty = 127.0;
@@ -533,96 +787,22 @@ impl MainState {
 
             self.screen.draw_texture(
                 slice,
-                [tx as usize, wall_type * 128 + ty as usize],
+                [tx as usize, intersection.wall_type * 128 + ty as usize],
                 y,
                 self.torch.intensity
                     * self.lighting.get_lighting_wall(
                         tx / 128.0,
                         ty * 0.0234375, //*3.0/128.0
-                        self.intersections.map_checkv[j],
-                        &self.intersections.orientation[j],
+                        intersection.map_checkv,
+                        &intersection.orientation,
                     ),
-                (3.0 / (self.intersections.distance_fisheye[j]
-                    * self.intersections.distance_fisheye[j]))
-                    .min(1.5),
+                (3.0 / (intersection.distance * intersection.distance)).min(1.5),
             );
             ty += ty_step;
         }
-
-        //draw floor
-        for y in (self.player.pitch + pos_z + rect_bottom) as usize..(h) as usize {
-            if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 805) {
-                // Don't draw the floor behind the minimap image
-                let current_dist = self.buffer_floors[y]; // Use a buffer since they're always the same values
-                let weight = current_dist / (self.intersections.distances[j]);
-
-                let rhs = self.player.pos * (1.0 - weight);
-                let current_floor_x = weight * pos[0] + rhs.x;
-                let current_floor_y = weight * pos[1] + rhs.y;
-
-                let location =
-                    current_floor_x as usize + current_floor_y as usize * self.map_size.0;
-                let floor_type = self.map.floors[location];
-
-                let ftx = (current_floor_x * self.cell_size) as usize % 128;
-                let fty = (current_floor_y * self.cell_size) as usize % 128;
-                let lighting = self.lighting.get_lighting_floor(
-                    ftx as f32 / 128.0,
-                    fty as f32 / 128.0,
-                    location,
-                );
-                self.screen.draw_texture(
-                    slice,
-                    [ftx, (floor_type * 128) + fty],
-                    y,
-                    self.torch.intensity * lighting,
-                    (3.0 / (current_dist * current_dist)).min(1.5),
-                )
-            }
-        }
-        //draw ceiling
-        let mut rect_top_draw = rect_top;
-        if rect_top + self.player.pitch + pos_z > h {
-            rect_top_draw = h - self.player.pitch - pos_z;
-        }
-        for y in 0..(rect_top_draw + self.player.pitch + pos_z) as usize {
-            let current_dist = self.buffer_floors[y];
-            let weight = current_dist / (self.intersections.distances[j]);
-
-            let rhs = self.player.pos * (1.0 - weight);
-            let current_floor_x = weight * pos[0] + rhs.x;
-            let current_floor_y = weight * pos[1] + rhs.y;
-
-            let ftx = (current_floor_x * self.cell_size) as usize % 128;
-            let fty = (current_floor_y * self.cell_size) as usize % 128;
-
-            self.screen.draw_texture(
-                slice,
-                [ftx, 1152 + fty],
-                y,
-                self.torch.intensity
-                    * self.lighting.get_lighting_floor(
-                        ftx as f32 / 128.0,
-                        fty as f32 / 128.0,
-                        current_floor_x as usize + current_floor_y as usize * self.map_size.0,
-                    ),
-                (3.0 / (current_dist * current_dist)).min(1.5),
-            );
-            //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
-        }
-
-        self.sprites.iter().for_each(|sprite| {
-            sprite.draw(
-                slice,
-                &self.player,
-                j,
-                &self.screen,
-                self.intersections.distances[j],
-                RAYSPERPIXEL,
-            )
-        })
     }
 }
+
 impl EventHandler for MainState {
     fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _: KeyMods, _: bool) {
         match keycode {
@@ -640,9 +820,6 @@ impl EventHandler for MainState {
 
         self.player.walk_animation(&self.buffer_walking, time);
 
-        for j in 0..self.angles.len() {
-            self.calculate_ray(self.player.dir_norm, self.angles[j], j)?;
-        }
         self.sprites
             .iter_mut()
             .for_each(|sprite| sprite.update(time));
@@ -699,6 +876,7 @@ impl EventHandler for MainState {
                 .partial_cmp(&a.distance2)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+
         let mut img_arr = std::mem::take(&mut self.screen.img_arr);
 
         img_arr
@@ -750,29 +928,32 @@ pub fn draw_fps_counter(ctx: &mut Context) -> GameResult<()> {
             .color(graphics::Color::WHITE),
     )
 }
-
-pub struct Intersections {
-    points: Vec<[f32; 2]>,
-    distances: Vec<f32>,
-    distance_fisheye: Vec<f32>,
-    map_checkv: Vec<usize>,
-    orientation: Vec<Orientation>,
-    wall_type: Vec<usize>,
+pub struct Intersection {
+    point: [f32; 2],
+    distance: f32,
+    map_checkv: usize,
+    orientation: Orientation,
+    wall_type: usize,
 }
 
-impl Intersections {
-    pub fn new(w: usize) -> Self {
+impl Intersection {
+    pub fn new(
+        point: [f32; 2],
+        distance: f32,
+        map_checkv: usize,
+        orientation: Orientation,
+        wall_type: usize,
+    ) -> Self {
         Self {
-            points: vec![[0.0, 0.0]; w / RAYSPERPIXEL],
-            distances: vec![0.0; w / RAYSPERPIXEL],
-            distance_fisheye: vec![0.0; w / RAYSPERPIXEL],
-            map_checkv: vec![0; w / RAYSPERPIXEL],
-            orientation: vec![Orientation::N; w / RAYSPERPIXEL],
-            wall_type: vec![0; w / RAYSPERPIXEL],
+            point,
+            distance,
+            map_checkv,
+            orientation,
+            wall_type,
         }
     }
 }
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Orientation {
     N = 1,
     E = 2,
@@ -780,6 +961,19 @@ pub enum Orientation {
     W = 4,
 }
 
+pub struct Transparent {
+    pub wall_type: usize,
+    pub distance: f32,
+}
+
+impl Transparent {
+    pub fn new(wall_type: usize, distance: f32) -> Self {
+        Self {
+            wall_type,
+            distance,
+        }
+    }
+}
 pub struct Sky {
     sb: graphics::spritebatch::SpriteBatch,
     idx: graphics::spritebatch::SpriteIdx,

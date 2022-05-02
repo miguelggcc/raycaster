@@ -63,8 +63,7 @@ impl Lighting {
             if self.smooth_switch {
                 match orientation {
                     Orientation::N => {
-                        let location = pos - self.map_size.0;
-                        let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
+                        let (tl, tr, bl, br) = get_vertices(pos - self.map_size.0, &self.vertices);
                         if y > 2.0 {
                             bilerp_compiletime(
                                 1.0 - x,
@@ -82,8 +81,7 @@ impl Lighting {
                         }
                     }
                     Orientation::S => {
-                        let location = pos + self.map_size.0;
-                        let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
+                        let (tl, tr, bl, br) = get_vertices(pos + self.map_size.0, &self.vertices);
                         if y > 2.0 {
                             bilerp_compiletime(
                                 x,
@@ -101,8 +99,7 @@ impl Lighting {
                         }
                     }
                     Orientation::E => {
-                        let location = pos - 1;
-                        let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
+                        let (tl, tr, bl, br) = get_vertices(pos - 1, &self.vertices);
                         if y > 2.0 {
                             bilerp_compiletime(
                                 x,
@@ -120,8 +117,7 @@ impl Lighting {
                         }
                     }
                     Orientation::W => {
-                        let location = pos + 1;
-                        let (tl, tr, bl, br) = get_vertices(location, &self.vertices);
+                        let (tl, tr, bl, br) = get_vertices(pos + 1, &self.vertices);
                         if y > 2.0 {
                             bilerp_compiletime(
                                 x,
