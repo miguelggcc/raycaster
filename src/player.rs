@@ -45,7 +45,7 @@ impl Player {
             pitch,
             mesh,
             jump,
-            height: 0.0,
+            height: 150.0,
             walking: false,
         })
     }
