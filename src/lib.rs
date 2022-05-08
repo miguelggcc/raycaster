@@ -16,6 +16,7 @@ use lighting::{Lighting, Torch};
 use map::Map;
 use num::clamp;
 use player::Player;
+use rand::Rng;
 use rayon::prelude::*;
 use screen::Screen;
 use sprite::Sprite;
@@ -554,14 +555,14 @@ impl MainState {
                 let current_floor_y = weight * intersection.point[1] + rhs.y;
 
                 let location =
-                    current_floor_x as usize + current_floor_y as usize * self.map_size.0;
+                unsafe{
+                    current_floor_x.to_int_unchecked::<usize>() + current_floor_y.to_int_unchecked::<usize>() * self.map_size.0}; //Cant be negative
                 let floor_type = self.map.floors[location];
-
-                let ftx = (current_floor_x * self.cell_size) as usize % 128;
-                let fty = (current_floor_y * self.cell_size) as usize % 128;
+                let ftx =  unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
+                let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
                 let lighting = self.lighting.get_lighting_floor(
-                    ftx as f32 / 128.0,
-                    fty as f32 / 128.0,
+                    ftx as f32,
+                    fty as f32,
                     location,
                 );
                 self.screen.draw_texture(
@@ -586,8 +587,12 @@ impl MainState {
             let current_floor_x = weight * intersection.point[0] + rhs.x;
             let current_floor_y = weight * intersection.point[1] + rhs.y;
 
-            let ftx = (current_floor_x * self.cell_size) as usize % 128;
-            let fty = (current_floor_y * self.cell_size) as usize % 128;
+            let location =
+                unsafe{
+                    current_floor_x.to_int_unchecked::<usize>() + current_floor_y.to_int_unchecked::<usize>() * self.map_size.0};
+
+                let ftx =  unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 };
+                let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 };
 
             self.screen.draw_texture(
                 slice,
@@ -595,9 +600,9 @@ impl MainState {
                 y,
                 self.torch.intensity
                     * self.lighting.get_lighting_floor(
-                        ftx as f32 / 128.0,
-                        fty as f32 / 128.0,
-                        current_floor_x as usize + current_floor_y as usize * self.map_size.0,
+                        ftx as f32,
+                        fty as f32,
+                        location,
                     ),
                 (3.0 / (current_dist * current_dist)).min(1.5),
             );
@@ -701,7 +706,7 @@ impl MainState {
                                                 + self.player.planedist
                                                     / ((tw2.distance - delta_distance)
                                                         * self.angles[j].cos())
-                                                    * ((4.0 - i as f32) / 8.0))
+                                                    * ((4.0 - i as f32) / 8.0)).min(h)
                                                 as usize
                                         {
                                             let current_dist = (self.player.planedist
@@ -820,8 +825,8 @@ impl MainState {
             }
         };
 
-        let inter_x = intersection.point[0] - intersection.point[0].floor();
-        let inter_y = intersection.point[1] - intersection.point[1].floor();
+        let inter_x = intersection.point[0].fract();
+        let inter_y = intersection.point[1].fract();
 
         let rect_top = center - height * 0.5;
         let rect_bottom = center + height * 0.5;
@@ -923,8 +928,8 @@ impl MainState {
                 y,
                 self.torch.intensity
                     * self.lighting.get_lighting_wall(
-                        tx / 128.0,
-                        ty * 0.0234375, //*3.0/128.0
+                        tx ,
+                        ty * 3.0, //*3.0/128.0
                         intersection.map_checkv,
                         &intersection.orientation,
                     ),
