@@ -2,9 +2,11 @@ use ggez::{
     graphics::{GlBackendSpec, Image, ImageGeneric},
     Context, GameResult,
 };
-
+use simdeez::*;
 use simdeez::sse2::*;
-use simdeez::sse41::*;
+//use simdeez::sse41::*;
+//use simdeez::avx2::*;
+//use simdeez::avx::*;
 
 #[allow(dead_code)]
 pub struct Screen {
@@ -48,7 +50,6 @@ impl Screen {
     pub fn reset_img(&mut self) {
         self.img_arr = vec![0; (self.width * self.height) * 4];
     }
-
     pub fn arr_to_rgba(&self, ctx: &mut Context) -> GameResult<ImageGeneric<GlBackendSpec>> {
         Image::from_rgba8(ctx, self.width as u16, self.height as u16, &self.img_arr)
     }
@@ -77,7 +78,6 @@ impl Screen {
             slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&p_int);
         }
     }
-
     pub fn draw_sprite(
         &self,
         slice: &mut [u8],
@@ -98,10 +98,10 @@ impl Screen {
             slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&pixel);
         }
     }
-
+/*
     pub fn draw_pixel(&self, img_arr: &mut [u8], pos: usize, pixel: &[u8; 4]) {
         img_arr[(pos << 2)..(pos << 2) + 4].copy_from_slice(pixel);
-    }
+    }*/
 }
 simd_compiletime_generate!(
     fn color_pixel(

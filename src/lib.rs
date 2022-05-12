@@ -16,7 +16,6 @@ use lighting::{Lighting, Torch};
 use map::Map;
 use num::clamp;
 use player::Player;
-use rand::Rng;
 use rayon::prelude::*;
 use screen::Screen;
 use sprite::Sprite;
@@ -28,6 +27,7 @@ use crate::utilities::input::get_delta;
 const PI: f32 = std::f32::consts::PI;
 const RAYSPERPIXEL: usize = 2;
 const FOV: f32 = 45.0;
+#[allow(dead_code)]
 pub struct MainState {
     player: Player,
     map_size: (usize, usize),
@@ -111,7 +111,6 @@ impl MainState {
             //Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
             //Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
             //Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
-            //Sprite::new(sprite::SpriteType::Torch, Vector2::new(9.0, 15.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(13.5, 1.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.5, 24.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(2.048, 3.5)),
@@ -119,7 +118,6 @@ impl MainState {
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.5, 24.0 - 0.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(24.5, 1.048)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(30.5, 1.048)),
-            //Sprite::new(sprite::SpriteType::Torch, Vector2::new(22.048, 8.5)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(27.0 - 0.048, 8.5)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5)),
             Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0 - 0.048, 8.5)),
@@ -135,7 +133,6 @@ impl MainState {
                 24 + map_size.0 * 1,
                 30 + map_size.0 * 1,
                 13 + map_size.0 * 1,
-                //22 + map_size.0 * 8,
                 26 + map_size.0 * 8,
                 28 + map_size.0 * 8,
                 31 + map_size.0 * 8,
@@ -490,7 +487,7 @@ impl MainState {
                                 + (map_checkv.x) as usize],
                         ));
                     }
-                } else if wall_type == 12 {
+                } else if wall_type == 12  {
                     transparent_walls.push(Intersection::new(
                         (startv + ray_dir_norm * distance).to_array(),
                         distance,
@@ -511,6 +508,23 @@ impl MainState {
                             == 6)
                 {
                     wall_type = 7;
+                }
+
+                if self.map.walls[startv.x as usize + startv.y as usize*self.map_size.0]==12{
+                    let m = ray_dir_norm.y/ray_dir_norm.x;
+                    let pos_x = ((self.player.pos.x.fract())*4.0).ceil()/4.0+ self.player.pos.x.floor();
+                    let iy = m * (pos_x - self.player.pos.x)
+                                + self.player.pos.y; // intersection y with the first step
+                            let distance = ((pos_x-self.player.pos.x)*(pos_x-self.player.pos.x)
+                                + (iy - self.player.pos.y) * (iy - self.player.pos.y))
+                                .sqrt();
+                    transparent_walls.push(Intersection::new(
+                        [pos_x, iy],
+                        distance,
+                        (startv.y) as usize * self.map_size.0 + (startv.x) as usize,
+                        orientation.clone(),
+                        12,
+                    ));
                 }
                 if tilefound {
                     break;
@@ -652,7 +666,6 @@ impl MainState {
                             let delta_distance = (1.0 / (4.0 * 4.0)
                                 + (iy - tw.point[1]) * (iy - tw.point[1]))
                                 .sqrt(); // distance between steps
-
                             for i in (1..8).rev() {
                                 let tw2 = Intersection::new(
                                     [
@@ -666,8 +679,8 @@ impl MainState {
                                     tw.orientation,
                                     12,
                                 );
-                                if tw2.point[1] > tw.point[1] - 5.0
-                                    && tw2.point[1] < tw.point[1] + 5.0
+                                if tw2.point[1] > tw.point[1] -5.0
+                                    && tw2.point[1] < tw.point[1] +5.0
                                 {
                                     if self.map.walls[tw2.point[0] as usize
                                         + tw2.point[1] as usize * self.map_size.0]
@@ -987,7 +1000,7 @@ impl EventHandler for MainState {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let (w, h) = graphics::drawable_size(ctx);
         graphics::clear(ctx, Color::BLACK);
-        let mut corr_angle = self.player.dir_norm.angle();
+        /*let mut corr_angle = self.player.dir_norm.angle();
         if corr_angle < 0.0 {
             corr_angle += 2.0 * PI;
         }
@@ -1001,7 +1014,7 @@ impl EventHandler for MainState {
             ..Default::default()
         };
         self.sky.sb.set(self.sky.idx, draw_param)?;
-        graphics::draw(ctx, &self.sky.sb, draw_param)?;
+        graphics::draw(ctx, &self.sky.sb, draw_param)?;*/
 
         (0..h as usize).for_each(|y| {
             if y < (self.player.pitch + h * 0.5) as usize {
@@ -1123,7 +1136,7 @@ impl TWandSprites<'_> {
         }
     }
 }
-
+#[allow(dead_code)]
 pub struct Sky {
     sb: graphics::spritebatch::SpriteBatch,
     idx: graphics::spritebatch::SpriteIdx,
