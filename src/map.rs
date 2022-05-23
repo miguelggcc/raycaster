@@ -9,7 +9,7 @@ use ggez::{
 use crate::player::Player;
 
 pub struct Map {
-    pub walls: Vec<usize>,
+    pub walls: Vec<Type>,
     pub floors: Vec<usize>,
     pub solid: Vec<bool>,
     pub doors: HashMap<usize, Door>,
@@ -145,41 +145,41 @@ pub fn read_map_walls(
     path: &Path,
     can_pass: &mut Vec<bool>,
     door_offset: &mut HashMap<usize, Door>,
-) -> GameResult<Vec<usize>> {
+) -> GameResult<Vec<Type>> {
     let map = graphics::Image::new(ctx, path)?.to_rgba8(ctx)?;
-    let walls: Vec<usize> = map
+    let walls: Vec<Type> = map
         .chunks(4)
         .enumerate()
         .map(|(i, color)| match color {
-            [255, 255, 0, 255] => 8,
-            [0, 0, 0, 255] => 2,
-            [0, 0, 255, 255] => 3,
-            [255, 0, 0, 255] => 4,
-            [0, 255, 0, 255] => 5,
+            [255, 255, 0, 255] => Type::LightStoneBrick,
+            [0, 0, 0, 255] => Type::Brick,
+            [0, 0, 255, 255] => Type::MossyBrick,
+            [255, 0, 0, 255] => Type::StoneBrick,
+            [0, 255, 0, 255] => Type::MossyStoneBrick,
             [255, 0, 255, 255] => {
                 let door = Door::new(1.0, false, 0.0, i);
                 door_offset.insert(i, door);
-                6
+                Type::WoodenDoor
             }
             [255, 64, 0, 255] => {
                 can_pass[i] = false;
-                10
+                Type::Cowbeb
             }
             [255, 128, 0, 255] => {
                 can_pass[i] = false;
-                11
+                Type::MetalBars
             }
             [0, 64, 255, 255] => {
                 can_pass[i] = false;
-                13
+                Type::Stairs2
             }
             [0, 128, 255, 255] => {
                 can_pass[i] = false;
-                12
+                Type::Stairs
             }
             _ => {
                 can_pass[i] = false;
-                0
+                Type::TiledFloor
             }
         })
         .collect();
@@ -212,4 +212,23 @@ fn get_drawparam(
             16.0 * (9.0 - player.pos.y + y_offset),
         ])
         .src(Rect::new(x_start, y_start, width, height))
+}
+#[allow(dead_code)]
+#[derive(Copy,Clone,PartialEq)]
+pub enum Type{
+    TiledFloor = 0,
+    Moss = 1,
+    Brick = 2,
+    MossyBrick = 3,
+    StoneBrick = 4,
+    MossyStoneBrick = 5,
+    WoodenDoor = 6,
+    FrameWoodenDoor = 7,
+    LightStoneBrick = 8,
+    TiledCeiling = 9,
+    Cowbeb = 10,
+    MetalBars = 11,
+    Stairs = 12,
+    Stairs2 = 13,
+
 }

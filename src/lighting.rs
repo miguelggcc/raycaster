@@ -51,7 +51,7 @@ impl Lighting {
                     &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
                 )
             } else {
-                128.0*128.0*self.lighting[pos]
+                128.0 * 128.0 * self.lighting[pos]
             }
         } else {
             1.0
@@ -143,7 +143,7 @@ impl Lighting {
                     Orientation::W => pos + 1,
                 };
 
-                128.0*128.0*self.lighting[location]
+                128.0 * 128.0 * self.lighting[location]
             }
         } else {
             1.0
@@ -208,7 +208,7 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     }
     let mut light = Vec::new();
     for i in light_int {
-        light.push(0.7f32.powf(0.8 * (15 - i) as f32)/(128.0*128.0));
+        light.push(0.7f32.powf(0.8 * (15 - i) as f32) / (128.0 * 128.0));
     }
     light
 }
@@ -223,9 +223,9 @@ simd_compiletime_generate!(
         l1 + l2 + l3 + l4*/
         let a2 = [x2, x, y, x];
         let a3 = [y2, y2, x2, y];
-        let v_a1 = S::loadu_ps(&vertices[0]); //[bottom left,bottom right, top left, top right]
-        let v_a2 = S::loadu_ps(&a2[0]);
-        let v_a3 = S::loadu_ps(&a3[0]);
+        let v_a1 = S::load_ps(&vertices[0]); //[bottom left,bottom right, top left, top right]
+        let v_a2 = S::load_ps(&a2[0]);
+        let v_a3 = S::load_ps(&a3[0]);
 
         S::horizontal_add_ps(v_a1 * v_a2 * v_a3)
     }
@@ -233,7 +233,7 @@ simd_compiletime_generate!(
 
 fn lerp(x: f32, l: f32, r: f32) -> f32 {
     let x2 = 128.0 - x;
-    (l * x2 + x * r)*128.0
+    (l * x2 + x * r) * 128.0
 }
 
 fn get_vertices(pos: usize, vertices: &[Vertex]) -> (Vertex, Vertex, Vertex, Vertex) {

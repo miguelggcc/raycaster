@@ -3,6 +3,14 @@ use core::ops::Div;
 use core::ops::Sub;
 use std::fmt::Debug;
 #[allow(dead_code)]
+#[inline(always)]
+pub fn ffmin(a: f32, b: f32) -> f32 {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
 #[allow(dead_code)]
 pub fn linspace<T>(x0: T, xend: T, n: u16) -> Vec<T>
 where

@@ -13,13 +13,14 @@ mod screen;
 mod sprite;
 mod utilities;
 use lighting::{Lighting, Torch};
-use map::Map;
+use map::{Map, Type};
 use num::clamp;
 use player::Player;
 use rayon::prelude::*;
 use screen::Screen;
 use sprite::Sprite;
 use utilities::input::{mouse_grabbed_and_hidden, set_mouse_location};
+use utilities::math::ffmin;
 use utilities::vector2::Vector2;
 //https://mynoise.net/NoiseMachines/dungeonRPGSoundscapeGenerator.php?l=32343600005816020035&mt=1&tm=1
 use crate::utilities::input::get_delta;
@@ -284,7 +285,7 @@ impl MainState {
             let check_front = self.player.pos + self.player.dir_norm * 1.5;
             let pos_door = (check_front.x) as usize + (check_front.y) as usize * self.map_size.0;
 
-            if self.map.walls[pos_door] == 6 {
+            if self.map.walls[pos_door] == Type::WoodenDoor {
                 let door = self.map.doors.get_mut(&pos_door).expect("Cant find door");
                 if !door.opening {
                     door.timer = timer::time_since_start(ctx).as_secs_f32();
@@ -325,7 +326,7 @@ impl MainState {
         let mut map_checkv = Vector2::new(startv.x.floor(), startv.y.floor());
         let mut ray_length1_d = Vector2::new(0.0f32, 0.0);
         let mut orientation = Orientation::N;
-        let mut wall_type = 0;
+        let mut wall_type = Type::TiledFloor;
         let mut transparent_walls = vec![];
         let mut stepv = Vector2::new(0.0f32, 0.0);
         let mut last_was_door = false;
@@ -381,11 +382,11 @@ impl MainState {
                 wall_type =
                     self.map.walls[map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize];
 
-                if last_was_door && wall_type > 0 {
-                    wall_type = 7;
+                if last_was_door && wall_type as usize> 0 {
+                    wall_type = Type::FrameWoodenDoor;
                 }
                 last_was_door = false;
-                if wall_type == 6 {
+                if wall_type == Type::WoodenDoor {
                     //door
                     let door_offset = self
                         .map
@@ -415,7 +416,7 @@ impl MainState {
                                 orientation = Orientation::E;
                                 map_checkv.x += 1.0;
                             }
-                            wall_type = 7;
+                            wall_type = Type::FrameWoodenDoor;
                             distance = ray_length1_d.x;
                         }
                     } else {
@@ -436,11 +437,11 @@ impl MainState {
                                 orientation = Orientation::N;
                                 map_checkv.y += 1.0;
                             }
-                            wall_type = 7;
+                            wall_type = Type::FrameWoodenDoor;
                             distance = ray_length1_d.y;
                         }
                     }
-                } else if wall_type == 10 || wall_type == 11 {
+                } else if wall_type == Type::Cowbeb || wall_type == Type::MetalBars {
                     let mut offset = 0.0;
                     if orientation == Orientation::N || orientation == Orientation::S {
                         if ray_length1_d.y - 0.5 * ray_unitstep_size.y <= ray_length1_d.x {
@@ -462,7 +463,7 @@ impl MainState {
                                 + (map_checkv.x + offset) as usize,
                             orientation.clone(),
                             self.map.walls[(map_checkv.y) as usize * self.map_size.0
-                                + (map_checkv.x + offset) as usize],
+                                + (map_checkv.x + offset) as usize] as usize,
                         ));
                     } else {
                         if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
@@ -484,42 +485,41 @@ impl MainState {
                                 + (map_checkv.x) as usize,
                             orientation.clone(),
                             self.map.walls[(map_checkv.y + offset) as usize * self.map_size.0
-                                + (map_checkv.x) as usize],
+                                + (map_checkv.x) as usize] as usize,
                         ));
                     }
-                } else if wall_type == 12  {
+                } else if wall_type == Type::Stairs  {
                     transparent_walls.push(Intersection::new(
                         (startv + ray_dir_norm * distance).to_array(),
                         distance,
                         (map_checkv.y) as usize * self.map_size.0 + (map_checkv.x) as usize,
                         orientation.clone(),
-                        wall_type,
+                        wall_type as usize,
                     ));
-                } else if wall_type > 0 && wall_type != 13 {
+                } else if wall_type as usize> 0 && wall_type != Type::Stairs2 {
                     tilefound = true;
                 }
                 if ((orientation == Orientation::W || orientation == Orientation::E)
                     && self.map.walls[map_checkv.y as usize * self.map_size.0
                         + (map_checkv.x - stepv.x) as usize]
-                        == 6)
+                        == Type::WoodenDoor)
                     || ((orientation == Orientation::N || orientation == Orientation::S)
                         && self.map.walls[(map_checkv.y - stepv.y) as usize * self.map_size.0
                             + map_checkv.x as usize]
-                            == 6)
+                            == Type::WoodenDoor)
                 {
-                    wall_type = 7;
+                    wall_type = Type::FrameWoodenDoor;
                 }
 
-                if self.map.walls[startv.x as usize + startv.y as usize*self.map_size.0]==12{
+                if self.map.walls[startv.x as usize + startv.y as usize*self.map_size.0]==Type::Stairs{
                     let m = ray_dir_norm.y/ray_dir_norm.x;
-                    let pos_x = ((self.player.pos.x.fract())*4.0).ceil()/4.0+ self.player.pos.x.floor();
-                    let iy = m * (pos_x - self.player.pos.x)
-                                + self.player.pos.y; // intersection y with the first step
-                            let distance = ((pos_x-self.player.pos.x)*(pos_x-self.player.pos.x)
-                                + (iy - self.player.pos.y) * (iy - self.player.pos.y))
+                    let pos_x0 = self.player.pos.x.floor();
+                    let iy = m * (pos_x0-self.player.pos.x)+self.player.pos.y; // intersection y with the first step
+                            let distance =-self.player.pos.x.fract()*(1.0
+                                + m *m)
                                 .sqrt();
                     transparent_walls.push(Intersection::new(
-                        [pos_x, iy],
+                        [self.player.pos.x.floor(), iy],
                         distance,
                         (startv.y) as usize * self.map_size.0 + (startv.x) as usize,
                         orientation.clone(),
@@ -538,7 +538,7 @@ impl MainState {
                 distance,
                 map_checkv.y as usize * self.map_size.0 + map_checkv.x as usize,
                 orientation,
-                wall_type,
+                wall_type as usize,
             ),
             transparent_walls,
         )
@@ -584,7 +584,7 @@ impl MainState {
                     [ftx, (floor_type * 128) + fty],
                     y,
                     self.torch.intensity * lighting,
-                    (3.0 / (current_dist * current_dist)).min(1.5),
+                    ffmin(3.0 / (current_dist * current_dist),1.5),
                 )
             }
         }
@@ -618,7 +618,7 @@ impl MainState {
                         fty as f32,
                         location,
                     ),
-                (3.0 / (current_dist * current_dist)).min(1.5),
+                ffmin(3.0 / (current_dist * current_dist),1.5),
             );
             //self.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
         }
@@ -666,7 +666,12 @@ impl MainState {
                             let delta_distance = (1.0 / (4.0 * 4.0)
                                 + (iy - tw.point[1]) * (iy - tw.point[1]))
                                 .sqrt(); // distance between steps
-                            for i in (1..8).rev() {
+                                let start =  if self.map.walls[self.player.pos.x as usize +self.player.pos.y as usize *self.map_size.0]==Type::Stairs{
+                                    (self.player.pos.x.fract()*4.0).ceil() as usize
+                                }else{
+                                        1
+                                    };
+                            for i in (start..8).rev() {
                                 let tw2 = Intersection::new(
                                     [
                                         tw.point[0] + signum * (i as f32) / 4.0,
@@ -684,10 +689,10 @@ impl MainState {
                                 {
                                     if self.map.walls[tw2.point[0] as usize
                                         + tw2.point[1] as usize * self.map_size.0]
-                                        == 12
+                                        == Type::Stairs
                                         || self.map.walls[tw2.point[0] as usize
                                             + tw2.point[1] as usize * self.map_size.0]
-                                            == 13
+                                            == Type::Stairs2
                                     {
                                         self.draw_wall(
                                             slice,
@@ -794,7 +799,7 @@ impl MainState {
                                                 [ftx, (0 * 128) + fty],
                                                 y,
                                                 0.05,
-                                                (3.0 / (current_dist * current_dist)).min(1.5),
+                                                ffmin(3.0 / (current_dist * current_dist),1.5),
                                             )
                                         }
                                     }
@@ -946,7 +951,7 @@ impl MainState {
                         intersection.map_checkv,
                         &intersection.orientation,
                     ),
-                (3.0 / (intersection.distance * intersection.distance)).min(1.5),
+                ffmin(3.0 / (intersection.distance * intersection.distance),1.5),
             );
             ty += ty_step;
         }
@@ -969,6 +974,10 @@ impl EventHandler for MainState {
         self.handle_input(ctx);
 
         self.player.walk_animation(&self.buffer_walking, time);
+
+        if self.map.walls[self.player.pos.x as usize + self.player.pos.y as usize*self.map_size.0]==Type::Stairs{
+            self.player.height = (self.player.pos.x.fract())*self.player.planedist;
+        }
 
         if self.player.walking {
             if self.sounds.walking.paused() {

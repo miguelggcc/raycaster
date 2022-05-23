@@ -65,8 +65,8 @@ impl Screen {
         if self.wall_textures[pos + 3] == 255.0 {
             let p = color_pixel_compiletime(
                 &self.wall_textures[pos..pos + 3],
-                &[shade, shade, shade, 1.0],
-                &[flashlight, flashlight, flashlight, 1.0],
+                shade,
+                flashlight,
                 &self.shade_col,
                 &self.flashlight_col,
             );
@@ -74,7 +74,8 @@ impl Screen {
             /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
             pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
             pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
-            let p_int = [p[0] as u8, p[1] as u8, p[2] as u8, p[3] as u8];
+            let p_int = [p[0].to_ne_bytes()[0], p[1].to_ne_bytes()[0], p[2].to_ne_bytes()[0], 255];
+            
             slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&p_int);
         }
     }
@@ -106,24 +107,23 @@ impl Screen {
 simd_compiletime_generate!(
     fn color_pixel(
         pixel: &[f32],
-        shade: &[f32],
-        flashlight: &[f32],
+        shade: f32,
+        flashlight: f32,
         shade_col: &[f32],
         flashlight_col: &[f32],
     ) -> [i32; 8] {
-        //let  v_pixel = S::loadu_epi32(&pixel[0]);
-        let v_pixel_f = S::loadu_ps(&pixel[0]);
-        let v_shade = S::loadu_ps(&shade[0]);
-        let v_flashlight = S::loadu_ps(&flashlight[0]);
-        let v_shade_col = S::loadu_ps(&shade_col[0]);
-        let v_flashlight_col = S::loadu_ps(&flashlight_col[0]);
+        let v_pixel_f = S::load_ps(&pixel[0]);
+        let v_shade = S::set1_ps(shade);
+        let v_flashlight = S::set1_ps(flashlight);
+        let v_shade_col = S::load_ps(&shade_col[0]);
+        let v_flashlight_col = S::load_ps(&flashlight_col[0]);
         let v_twofivefive = S::set1_epi32(255);
         let mut pixel_out = [0i32; 8];
         let mut multiplicator = v_shade_col * v_shade + v_flashlight * v_flashlight_col;
         multiplicator *= v_pixel_f;
         let out = S::cvtps_epi32(multiplicator);
 
-        S::storeu_epi32(&mut pixel_out[0], S::min_epi32(out, v_twofivefive));
+        S::store_epi32(&mut pixel_out[0], S::min_epi32(out, v_twofivefive));
         pixel_out
     }
 );
