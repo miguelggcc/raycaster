@@ -3,7 +3,7 @@ use ggez::{
     Context, GameResult,
 };
 
-use crate::utilities::vector2::Vector2;
+use crate::{utilities::vector2::Vector2, map::Type};
 
 pub struct Player {
     pub pos: Vector2<f32>,
@@ -14,6 +14,7 @@ pub struct Player {
     pub jump: f32,
     pub walking: bool,
     pub height: f32,
+    pub current_wall: Type,
     pub mesh: Mesh,
 }
 
@@ -46,6 +47,7 @@ impl Player {
             mesh,
             jump,
             height: 150.0,
+            current_wall: Type::TiledFloor,
             walking: false,
         })
     }
@@ -55,7 +57,8 @@ impl Player {
         Ok(())
     }
 
-    pub fn walk_animation(&mut self, buffer_walking: &[f32], time: f32) {
+    pub fn update(&mut self,wall: Type, buffer_walking: &[f32], time: f32) {
+        self.current_wall = wall;
         self.jump = self.height;
         if self.walking {
             let delta_jump = buffer_walking[(time % 0.5 * 300.0) as usize];

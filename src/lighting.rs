@@ -6,6 +6,7 @@ use simdeez::sse41::*;
 use std::collections::VecDeque;
 
 pub struct Lighting {
+    light_int: Vec<u8>,
     vertices: Vec<Vertex>,
     lighting: Vec<f32>,
     map_size: (usize, usize),
@@ -15,7 +16,9 @@ pub struct Lighting {
 
 impl Lighting {
     pub fn new(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Self {
-        let lighting = lighting(torches_pos, map, map_size);
+        let light_int = lighting(torches_pos, map, map_size);
+        let lighting:Vec<f32> = light_int.iter().map(|l|0.7f32.powf(0.8 * (15 - l) as f32) / (128.0 * 128.0)).collect();
+
         let mut all_vertices = vec![];
         for j in 0..map_size.1 + 1 {
             for i in 0..map_size.0 + 1 {
@@ -34,6 +37,38 @@ impl Lighting {
         });
 
         Self {
+            light_int,
+            vertices,
+            lighting,
+            map_size,
+            switch: true,
+            smooth_switch: true,
+        }
+    }
+
+    pub fn from_floor(lighting_1: &Lighting, map_size: (usize, usize))->Self{
+        let mut all_vertices = vec![];
+        let light_int: Vec<u8> = lighting_1.light_int.to_vec().iter().map(|l|{(l-1).max(0)}).collect();
+    let lighting:Vec<f32> = light_int.iter().map(|l|0.7f32.powf(0.8 * (15 - l) as f32) / (128.0 * 128.0)).collect();
+        
+        for j in 0..map_size.1 + 1 {
+            for i in 0..map_size.0 + 1 {
+                all_vertices.push(Vertex::new([i, j], map_size, &lighting));
+            }
+        }
+
+        let mut vertices = vec![Vertex::default(); map_size.0 * map_size.1 * 4];
+
+        vertices.chunks_mut(4).enumerate().for_each(|(pos, chunk)| {
+            let tl = all_vertices[pos + (pos / map_size.0)];
+            let tr = all_vertices[pos + 1 + (pos / map_size.0)];
+            let bl = all_vertices[pos + map_size.0 + 1 + (pos / map_size.0)];
+            let br = all_vertices[pos + map_size.0 + 2 + (pos / map_size.0)];
+            chunk.copy_from_slice(&[tl, tr, bl, br]);
+        });
+
+        Self {
+            light_int,
             vertices,
             lighting,
             map_size,
@@ -151,7 +186,7 @@ impl Lighting {
     }
 }
 
-pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Vec<f32> {
+pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Vec<u8> {
     let mut lightq = VecDeque::new();
     let mut light_int: Vec<u8> = vec![0; map_size.0 * map_size.1];
     torches_pos.into_iter().for_each(|light_pos| {
@@ -206,11 +241,7 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
             }
         }
     }
-    let mut light = Vec::new();
-    for i in light_int {
-        light.push(0.7f32.powf(0.8 * (15 - i) as f32) / (128.0 * 128.0));
-    }
-    light
+    light_int
 }
 simd_compiletime_generate!(
     fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
