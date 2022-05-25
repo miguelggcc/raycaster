@@ -638,10 +638,10 @@ fn draw_wall(
             );
             ty = 127.0;
         }
-
+unsafe{
         ms.screen.draw_texture(
             slice,
-            [tx as usize, intersection.wall_type * 128 + ty as usize],
+            [tx.to_int_unchecked::<usize>(), intersection.wall_type * 128 + ty.to_int_unchecked::<usize>()],
             y,
             ms.torch.intensity
                 * lighting_wall.get_lighting_wall(
@@ -652,6 +652,7 @@ fn draw_wall(
                 ),
             ffmin(3.0 / (intersection.distance * intersection.distance),1.5),
         );
+    }
         ty += ty_step;
     }
 }

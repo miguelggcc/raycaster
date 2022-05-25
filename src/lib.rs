@@ -105,7 +105,7 @@ impl MainState {
 
         let sprite_textures = graphics::Image::new(ctx, "/sprite128.png")?.to_rgba8(ctx)?;
 
-        let mut screen = Screen::new(h, w, 128, 128 * 8);
+        let mut screen = unsafe{Screen::new(h, w, 128, 128 * 8)};
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![

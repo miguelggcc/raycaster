@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::Orientation;
-use simdeez::sse2::*;
-use simdeez::sse41::*;
+
+use std::arch::x86_64::*;
 use std::collections::VecDeque;
 
 pub struct Lighting {
@@ -18,7 +18,6 @@ impl Lighting {
     pub fn new(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Self {
         let light_int = lighting(torches_pos, map, map_size);
         let lighting:Vec<f32> = light_int.iter().map(|l|0.7f32.powf(0.8 * (15 - l) as f32) / (128.0 * 128.0)).collect();
-
         let mut all_vertices = vec![];
         for j in 0..map_size.1 + 1 {
             for i in 0..map_size.0 + 1 {
@@ -80,11 +79,12 @@ impl Lighting {
         if self.switch {
             let (tl, tr, bl, br) = get_vertices(pos, &self.vertices);
             if self.smooth_switch {
-                bilerp_compiletime(
+                let t1 = unsafe{bilerp(
                     x,
                     128.0 - y,
                     &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
-                )
+                )};
+                t1
             } else {
                 128.0 * 128.0 * self.lighting[pos]
             }
@@ -93,14 +93,14 @@ impl Lighting {
         }
     }
 
-    pub fn get_lighting_wall(&self, x: f32, y: f32, pos: usize, orientation: &Orientation) -> f32 {
+    pub unsafe fn get_lighting_wall(&self, x: f32, y: f32, pos: usize, orientation: &Orientation) -> f32 {
         if self.switch {
             if self.smooth_switch {
                 match orientation {
                     Orientation::N => {
                         let (tl, tr, bl, br) = get_vertices(pos - self.map_size.0, &self.vertices);
                         if y > 256.0 {
-                            bilerp_compiletime(
+                            bilerp(
                                 128.0 - x,
                                 384.0 - y,
                                 &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
@@ -108,17 +108,14 @@ impl Lighting {
                         } else if y > 128.0 {
                             lerp(128.0 - x, tl.lighting, tr.lighting)
                         } else {
-                            bilerp_compiletime(
-                                128.0 - x,
-                                128.0 - y,
-                                &[tl.lighting, tr.lighting, bl.lighting, br.lighting],
-                            )
+                            lerp(128.0 - x, tl.lighting, tr.lighting)
+
                         }
                     }
                     Orientation::S => {
                         let (tl, tr, bl, br) = get_vertices(pos + self.map_size.0, &self.vertices);
                         if y > 256.0 {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 384.0 - y,
                                 &[tl.lighting, tr.lighting, bl.lighting, br.lighting],
@@ -126,7 +123,7 @@ impl Lighting {
                         } else if y > 128.0 {
                             lerp(x, bl.lighting, br.lighting)
                         } else {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 128.0 - y,
                                 &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
@@ -136,7 +133,7 @@ impl Lighting {
                     Orientation::E => {
                         let (tl, tr, bl, br) = get_vertices(pos - 1, &self.vertices);
                         if y > 256.0 {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 384.0 - y,
                                 &[tr.lighting, br.lighting, tl.lighting, bl.lighting],
@@ -144,7 +141,7 @@ impl Lighting {
                         } else if y > 128.0 {
                             lerp(x, tl.lighting, bl.lighting)
                         } else {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 128.0 - y,
                                 &[tl.lighting, bl.lighting, tr.lighting, br.lighting],
@@ -154,7 +151,7 @@ impl Lighting {
                     Orientation::W => {
                         let (tl, tr, bl, br) = get_vertices(pos + 1, &self.vertices);
                         if y > 256.0 {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 384.0 - y,
                                 &[bl.lighting, tl.lighting, br.lighting, tr.lighting],
@@ -162,7 +159,7 @@ impl Lighting {
                         } else if y > 128.0 {
                             lerp(x, br.lighting, tr.lighting)
                         } else {
-                            bilerp_compiletime(
+                            bilerp(
                                 x,
                                 128.0 - y,
                                 &[br.lighting, tr.lighting, bl.lighting, tl.lighting],
@@ -243,30 +240,34 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     }
     light_int
 }
-simd_compiletime_generate!(
-    fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
+#[inline(always)]
+    unsafe fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
         let x2 = 128.0 - x;
         let y2 = 128.0 - y;
-        /*let l1 = bl * x2 * y2;
-        let l2 = br * x * y2;
-        let l3 = tl * y * x2;
-        let l4 = tr * x * y;
-        l1 + l2 + l3 + l4*/
-        let a2 = [x2, x, y, x];
-        let a3 = [y2, y2, x2, y];
-        let v_a1 = S::load_ps(&vertices[0]); //[bottom left,bottom right, top left, top right]
-        let v_a2 = S::load_ps(&a2[0]);
-        let v_a3 = S::load_ps(&a3[0]);
 
-        S::horizontal_add_ps(v_a1 * v_a2 * v_a3)
+      
+        let v_a1 = _mm_loadu_ps(&vertices[0]); //[bottom left,bottom right, top left, top right]
+        let v_a2 = _mm_set_ps(x,y,x,x2);
+        let v_a3 = _mm_set_ps(y,x2,y2,y2);
+
+        let m = _mm_mul_ps(v_a1,_mm_mul_ps(v_a2,v_a3));
+        let t1 = _mm_hadd_ps(m, m);
+        _mm_cvtss_f32(_mm_hadd_ps(t1, t1))
     }
-);
 
-fn lerp(x: f32, l: f32, r: f32) -> f32 {
+    #[inline(always)]
+unsafe fn lerp(x: f32, l: f32, r: f32) -> f32 {
     let x2 = 128.0 - x;
-    (l * x2 + x * r) * 128.0
+    let v_a1 =_mm_set_ps(0.0,0.0,r,l);
+    let v_a2 =_mm_set_ps(0.0,0.0,x,x2);
+    let t1 = _mm_mul_ps(v_a1,v_a2);
+    _mm_cvtss_f32(_mm_hadd_ps(t1, t1))*128.0
+
+
+   // (l * x2 + x * r) * 128.0
 }
 
+#[inline(always)]
 fn get_vertices(pos: usize, vertices: &[Vertex]) -> (Vertex, Vertex, Vertex, Vertex) {
     let tl = vertices[pos * 4];
     let tr = vertices[pos * 4 + 1];

@@ -1,12 +1,10 @@
+use std::arch::x86_64::*;
+
 use ggez::{
     graphics::{GlBackendSpec, Image, ImageGeneric},
     Context, GameResult,
 };
-use simdeez::*;
-use simdeez::sse2::*;
-//use simdeez::sse41::*;
-//use simdeez::avx2::*;
-//use simdeez::avx::*;
+
 
 #[allow(dead_code)]
 pub struct Screen {
@@ -18,16 +16,19 @@ pub struct Screen {
     sprite_textures: Vec<u8>,
     length_textures: usize,
     length_sprites: usize,
-    shade_col: [f32; 4],
-    flashlight_col: [f32; 4],
+    shade_col: __m128,
+    flashlight_col: __m128,
+
 }
 
 impl Screen {
-    pub fn new(widthf: f32, heightf: f32, length_textures: usize, length_sprites: usize) -> Self {
+    pub unsafe fn new(widthf: f32, heightf: f32, length_textures: usize, length_sprites: usize) -> Self {
         let width = widthf as usize;
         let height = heightf as usize;
         let img_arr = vec![0; (width * height) * 4];
         let img_arr_len = img_arr.len();
+        let shade_v = [1.5, 1.1, 0.6, 1.0];
+        let flashlight_v = [1.0, 0.9, 0.8, 1.0];
         Self {
             img_arr,
             img_arr_len,
@@ -37,8 +38,8 @@ impl Screen {
             sprite_textures: Vec::new(),
             length_textures,
             length_sprites,
-            shade_col: [1.5, 1.1, 0.6, 1.0],
-            flashlight_col: [1.0, 0.9, 0.8, 1.0],
+            shade_col: _mm_loadu_ps(&shade_v[0]),
+            flashlight_col:_mm_loadu_ps(&flashlight_v[0]),
         }
     }
 
@@ -63,20 +64,19 @@ impl Screen {
     ) {
         let pos = (texture_position[1] * self.length_textures + texture_position[0]) << 2; //position of current pixel
         if self.wall_textures[pos + 3] == 255.0 {
-            let p = color_pixel_compiletime(
+            unsafe{
+               let p_int = {
+            let p = color_pixel(
                 &self.wall_textures[pos..pos + 3],
                 shade,
                 flashlight,
-                &self.shade_col,
-                &self.flashlight_col,
+                self.shade_col,
+                self.flashlight_col,
             );
-
-            /*pixel[0] = (pixel[0] as f32 * (shade * 1.5 + flashlight * 1.0)) as u8;
-            pixel[1] = (pixel[1] as f32 * (shade * 1.1 + flashlight * 0.9)) as u8;
-            pixel[2] = (pixel[2] as f32 * (shade * 0.6 + flashlight * 0.8)) as u8;*/
-            let p_int = [p[0].to_ne_bytes()[0], p[1].to_ne_bytes()[0], p[2].to_ne_bytes()[0], 255];
-            
+            [p[0].to_ne_bytes()[0], p[1].to_ne_bytes()[0], p[2].to_ne_bytes()[0], 255]};
+     
             slice[(pixel_height << 2)..(pixel_height << 2) + 4].copy_from_slice(&p_int);
+        }
         }
     }
     pub fn draw_sprite(
@@ -104,26 +104,26 @@ impl Screen {
         img_arr[(pos << 2)..(pos << 2) + 4].copy_from_slice(pixel);
     }*/
 }
-simd_compiletime_generate!(
-    fn color_pixel(
+
+#[inline(always)]
+   unsafe fn color_pixel(
         pixel: &[f32],
         shade: f32,
         flashlight: f32,
-        shade_col: &[f32],
-        flashlight_col: &[f32],
-    ) -> [i32; 8] {
-        let v_pixel_f = S::load_ps(&pixel[0]);
-        let v_shade = S::set1_ps(shade);
-        let v_flashlight = S::set1_ps(flashlight);
-        let v_shade_col = S::load_ps(&shade_col[0]);
-        let v_flashlight_col = S::load_ps(&flashlight_col[0]);
-        let v_twofivefive = S::set1_epi32(255);
-        let mut pixel_out = [0i32; 8];
-        let mut multiplicator = v_shade_col * v_shade + v_flashlight * v_flashlight_col;
-        multiplicator *= v_pixel_f;
-        let out = S::cvtps_epi32(multiplicator);
+        v_shade_col: __m128,
+        v_flashlight_col: __m128,
 
-        S::store_epi32(&mut pixel_out[0], S::min_epi32(out, v_twofivefive));
+    ) -> [i32; 8] {
+        let v_pixel = _mm_loadu_ps(&pixel[0]);
+        let v_shade = _mm_set1_ps(shade);
+        let v_flashlight = _mm_set1_ps(flashlight);
+        let v_twofivefive  = _mm_set1_epi32(255);
+        let mut pixel_out = [0i32; 8];
+        let mut multiplicator = _mm_add_ps(_mm_mul_ps(v_shade_col,v_shade), _mm_mul_ps(v_flashlight, v_flashlight_col));
+        multiplicator = _mm_mul_ps(multiplicator, v_pixel);
+        let out = _mm_cvtps_epi32(multiplicator);
+
+        _mm_storeu_si128(pixel_out.as_mut_ptr() as *mut _, _mm_min_epi32(out, v_twofivefive));
         pixel_out
     }
-);
+  
