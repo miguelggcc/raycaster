@@ -108,7 +108,10 @@ impl Lighting {
                         } else if y > 128.0 {
                             lerp(128.0 - x, tl.lighting, tr.lighting)
                         } else {
-                            lerp(128.0 - x, tl.lighting, tr.lighting)
+                            bilerp(
+                                128.0 - x,
+                                128.0 - y,
+                                &[tl.lighting, tr.lighting, bl.lighting, br.lighting])
 
                         }
                     }
