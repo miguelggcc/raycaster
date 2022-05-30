@@ -3,7 +3,7 @@ use ggez::{
     Context, GameResult,
 };
 
-use crate::{utilities::vector2::Vector2, map::Type};
+use crate::{map::Type, utilities::vector2::Vector2};
 
 pub struct Player {
     pub pos: Vector2<f32>,
@@ -57,7 +57,7 @@ impl Player {
         Ok(())
     }
 
-    pub fn update(&mut self,wall: Type, buffer_walking: &[f32], time: f32) {
+    pub fn update(&mut self, wall: Type, buffer_walking: &[f32], time: f32) {
         self.current_wall = wall;
         self.jump = self.height;
         if self.walking {

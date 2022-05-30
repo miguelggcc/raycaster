@@ -6,7 +6,6 @@ use std::arch::x86_64::*;
 use std::collections::VecDeque;
 
 pub struct Lighting {
-    light_int: Vec<u8>,
     vertices: Vec<Vertex>,
     lighting: Vec<f32>,
     map_size: (usize, usize),
@@ -16,27 +15,33 @@ pub struct Lighting {
 
 impl Lighting {
     pub fn new(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Self {
-        let light_int = lighting(torches_pos, map, map_size);
-        let lighting:Vec<f32> = light_int.iter().map(|l|0.7f32.powf(0.8 * (15 - l) as f32) / (128.0 * 128.0)).collect();
+        let light_int = calculate_lighting(torches_pos, map, map_size);
+        let lighting: Vec<f32> = light_int
+            .iter()
+            .map(|l| 0.7f32.powf(0.8 * (15 - l) as f32) / (127.0 * 127.0))
+            .collect();
         let mut all_vertices = vec![];
-        for j in 0..map_size.1 + 1 {
-            for i in 0..map_size.0 + 1 {
-                all_vertices.push(Vertex::new([i, j], map_size, &lighting));
+        for k in 0..2 {
+            for j in 0..map_size.1 + 1 {
+                for i in 0..map_size.0 + 1 {
+                    all_vertices.push(Vertex::new([i, j, k], map_size, &lighting));
+                }
             }
         }
 
-        let mut vertices = vec![Vertex::default(); map_size.0 * map_size.1 * 4];
+        let mut vertices = vec![Vertex::default(); map_size.0 * map_size.1 * 4 * 2];
 
         vertices.chunks_mut(4).enumerate().for_each(|(pos, chunk)| {
-            let tl = all_vertices[pos + (pos / map_size.0)];
-            let tr = all_vertices[pos + 1 + (pos / map_size.0)];
-            let bl = all_vertices[pos + map_size.0 + 1 + (pos / map_size.0)];
-            let br = all_vertices[pos + map_size.0 + 2 + (pos / map_size.0)];
+            let z = pos / (map_size.0 * map_size.1);
+            let offset = (pos / map_size.0) + z * (map_size.0 + 1);
+            let tl = all_vertices[pos + offset];
+            let tr = all_vertices[pos + 1 + offset];
+            let bl = all_vertices[pos + map_size.0 + 1 + offset];
+            let br = all_vertices[pos + map_size.0 + 2 + offset];
             chunk.copy_from_slice(&[tl, tr, bl, br]);
         });
 
         Self {
-            light_int,
             vertices,
             lighting,
             map_size,
@@ -44,129 +49,224 @@ impl Lighting {
             smooth_switch: true,
         }
     }
-
-    pub fn from_floor(lighting_1: &Lighting, map_size: (usize, usize))->Self{
-        let mut all_vertices = vec![];
-        let light_int: Vec<u8> = lighting_1.light_int.to_vec().iter().map(|l|{(l-1).max(0)}).collect();
-    let lighting:Vec<f32> = light_int.iter().map(|l|0.7f32.powf(0.8 * (15 - l) as f32) / (128.0 * 128.0)).collect();
-        
-        for j in 0..map_size.1 + 1 {
-            for i in 0..map_size.0 + 1 {
-                all_vertices.push(Vertex::new([i, j], map_size, &lighting));
-            }
-        }
-
-        let mut vertices = vec![Vertex::default(); map_size.0 * map_size.1 * 4];
-
-        vertices.chunks_mut(4).enumerate().for_each(|(pos, chunk)| {
-            let tl = all_vertices[pos + (pos / map_size.0)];
-            let tr = all_vertices[pos + 1 + (pos / map_size.0)];
-            let bl = all_vertices[pos + map_size.0 + 1 + (pos / map_size.0)];
-            let br = all_vertices[pos + map_size.0 + 2 + (pos / map_size.0)];
-            chunk.copy_from_slice(&[tl, tr, bl, br]);
-        });
-
-        Self {
-            light_int,
-            vertices,
-            lighting,
-            map_size,
-            switch: true,
-            smooth_switch: true,
-        }
-    }
+    #[inline(always)]
     pub fn get_lighting_floor(&self, x: f32, y: f32, pos: usize) -> f32 {
         if self.switch {
             let (tl, tr, bl, br) = get_vertices(pos, &self.vertices);
             if self.smooth_switch {
-                let t1 = unsafe{bilerp(
-                    x,
-                    128.0 - y,
-                    &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
-                )};
-                t1
+                unsafe {
+                    bilerp(
+                        x,
+                        127.0 - y,
+                        bl.lighting,
+                        br.lighting,
+                        tl.lighting,
+                        tr.lighting,
+                    )
+                }
             } else {
-                128.0 * 128.0 * self.lighting[pos]
+                127.0 * 127.0 * self.lighting[pos]
             }
         } else {
             1.0
         }
     }
 
-    pub unsafe fn get_lighting_wall(&self, x: f32, y: f32, pos: usize, orientation: &Orientation) -> f32 {
+    #[inline(always)]
+    pub unsafe fn get_lighting_wall(
+        &self,
+        x: f32,
+        y: f32,
+        pos: usize,
+        orientation: &Orientation,
+        is_up: bool,
+    ) -> f32 {
         if self.switch {
             if self.smooth_switch {
-                match orientation {
-                    Orientation::N => {
-                        let (tl, tr, bl, br) = get_vertices(pos - self.map_size.0, &self.vertices);
-                        if y > 256.0 {
-                            bilerp(
-                                128.0 - x,
-                                384.0 - y,
-                                &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
-                            )
-                        } else if y > 128.0 {
-                            lerp(128.0 - x, tl.lighting, tr.lighting)
-                        } else {
-                            bilerp(
-                                128.0 - x,
-                                128.0 - y,
-                                &[tl.lighting, tr.lighting, bl.lighting, br.lighting])
+                if !is_up {
+                    match orientation {
+                        Orientation::N => {
+                            let (tl, tr, bl, br) =
+                                get_vertices(pos - self.map_size.0, &self.vertices);
 
+                            if y > 256.0 {
+                                bilerp(
+                                    127.0 - x,
+                                    384.0 - y,
+                                    bl.lighting,
+                                    br.lighting,
+                                    tl.lighting,
+                                    tr.lighting,
+                                )
+                            } else {
+                                lerp(127.0 - x, tl.lighting, tr.lighting)
+                            }
+                        }
+                        Orientation::S => {
+                            let (tl, tr, bl, br) =
+                                get_vertices(pos + self.map_size.0, &self.vertices);
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    tl.lighting,
+                                    tr.lighting,
+                                    bl.lighting,
+                                    br.lighting,
+                                )
+                            } else {
+                                lerp(x, bl.lighting, br.lighting)
+                            }
+                        }
+                        Orientation::E => {
+                            let (tl, tr, bl, br) = get_vertices(pos - 1, &self.vertices);
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    tr.lighting,
+                                    br.lighting,
+                                    tl.lighting,
+                                    bl.lighting,
+                                )
+                            } else {
+                                lerp(x, tl.lighting, bl.lighting)
+                            }
+                        }
+                        Orientation::W => {
+                            let (tl, tr, bl, br) = get_vertices(pos + 1, &self.vertices);
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    bl.lighting,
+                                    tl.lighting,
+                                    br.lighting,
+                                    tr.lighting,
+                                )
+                            } else {
+                                lerp(x, br.lighting, tr.lighting)
+                            }
                         }
                     }
-                    Orientation::S => {
-                        let (tl, tr, bl, br) = get_vertices(pos + self.map_size.0, &self.vertices);
-                        if y > 256.0 {
-                            bilerp(
-                                x,
-                                384.0 - y,
-                                &[tl.lighting, tr.lighting, bl.lighting, br.lighting],
-                            )
-                        } else if y > 128.0 {
-                            lerp(x, bl.lighting, br.lighting)
-                        } else {
-                            bilerp(
-                                x,
-                                128.0 - y,
-                                &[bl.lighting, br.lighting, tl.lighting, tr.lighting],
-                            )
+                } else {
+                    match orientation {
+                        Orientation::N => {
+                            let (tl, tr, bl, br) =
+                                get_vertices(pos - self.map_size.0, &self.vertices);
+                            let (btl, btr, _, _) = get_vertices(
+                                pos - self.map_size.0 - self.map_size.0 * self.map_size.1,
+                                &self.vertices,
+                            );
+                            if y > 256.0 {
+                                bilerp(
+                                    127.0 - x,
+                                    384.0 - y,
+                                    btl.lighting,
+                                    btr.lighting,
+                                    tl.lighting,
+                                    tr.lighting,
+                                )
+                            } else if y > 127.0 {
+                                lerp(127.0 - x, tl.lighting, tr.lighting)
+                            } else {
+                                bilerp(
+                                    127.0 - x,
+                                    127.0 - y,
+                                    tl.lighting,
+                                    tr.lighting,
+                                    bl.lighting,
+                                    br.lighting,
+                                )
+                            }
                         }
-                    }
-                    Orientation::E => {
-                        let (tl, tr, bl, br) = get_vertices(pos - 1, &self.vertices);
-                        if y > 256.0 {
-                            bilerp(
-                                x,
-                                384.0 - y,
-                                &[tr.lighting, br.lighting, tl.lighting, bl.lighting],
-                            )
-                        } else if y > 128.0 {
-                            lerp(x, tl.lighting, bl.lighting)
-                        } else {
-                            bilerp(
-                                x,
-                                128.0 - y,
-                                &[tl.lighting, bl.lighting, tr.lighting, br.lighting],
-                            )
+                        Orientation::S => {
+                            let (tl, tr, bl, br) =
+                                get_vertices(pos + self.map_size.0, &self.vertices);
+                            let (_, _, bbl, bbr) = get_vertices(
+                                pos + self.map_size.0 - self.map_size.0 * self.map_size.1,
+                                &self.vertices,
+                            );
+
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    bbl.lighting,
+                                    bbr.lighting,
+                                    bl.lighting,
+                                    br.lighting,
+                                )
+                            } else if y > 127.0 {
+                                lerp(x, bl.lighting, br.lighting)
+                            } else {
+                                bilerp(
+                                    x,
+                                    127.0 - y,
+                                    bl.lighting,
+                                    br.lighting,
+                                    tl.lighting,
+                                    tr.lighting,
+                                )
+                            }
                         }
-                    }
-                    Orientation::W => {
-                        let (tl, tr, bl, br) = get_vertices(pos + 1, &self.vertices);
-                        if y > 256.0 {
-                            bilerp(
-                                x,
-                                384.0 - y,
-                                &[bl.lighting, tl.lighting, br.lighting, tr.lighting],
-                            )
-                        } else if y > 128.0 {
-                            lerp(x, br.lighting, tr.lighting)
-                        } else {
-                            bilerp(
-                                x,
-                                128.0 - y,
-                                &[br.lighting, tr.lighting, bl.lighting, tl.lighting],
-                            )
+                        Orientation::E => {
+                            let (tl, tr, bl, br) = get_vertices(pos - 1, &self.vertices);
+                            let (btl, _, bbl, _) = get_vertices(
+                                pos - 1 - self.map_size.0 * self.map_size.1,
+                                &self.vertices,
+                            );
+
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    btl.lighting,
+                                    bbl.lighting,
+                                    tl.lighting,
+                                    bl.lighting,
+                                )
+                            } else if y > 127.0 {
+                                lerp(x, tl.lighting, bl.lighting)
+                            } else {
+                                bilerp(
+                                    x,
+                                    127.0 - y,
+                                    tl.lighting,
+                                    bl.lighting,
+                                    tr.lighting,
+                                    br.lighting,
+                                )
+                            }
+                        }
+                        Orientation::W => {
+                            let (tl, tr, bl, br) = get_vertices(pos + 1, &self.vertices);
+                            let (_, btr, _, bbr) = get_vertices(
+                                pos + 1 - self.map_size.0 * self.map_size.1,
+                                &self.vertices,
+                            );
+
+                            if y > 256.0 {
+                                bilerp(
+                                    x,
+                                    384.0 - y,
+                                    bbr.lighting,
+                                    btr.lighting,
+                                    br.lighting,
+                                    tr.lighting,
+                                )
+                            } else if y > 127.0 {
+                                lerp(x, br.lighting, tr.lighting)
+                            } else {
+                                bilerp(
+                                    x,
+                                    127.0 - y,
+                                    br.lighting,
+                                    tr.lighting,
+                                    bl.lighting,
+                                    tl.lighting,
+                                )
+                            }
                         }
                     }
                 }
@@ -178,7 +278,7 @@ impl Lighting {
                     Orientation::W => pos + 1,
                 };
 
-                128.0 * 128.0 * self.lighting[location]
+                127.0 * 127.0 * self.lighting[location]
             }
         } else {
             1.0
@@ -186,9 +286,14 @@ impl Lighting {
     }
 }
 
-pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize)) -> Vec<u8> {
+pub fn calculate_lighting(
+    torches_pos: Vec<usize>,
+    map: &[bool],
+    map_size: (usize, usize),
+) -> Vec<u8> {
+    let map = [map, map].concat();
     let mut lightq = VecDeque::new();
-    let mut light_int: Vec<u8> = vec![0; map_size.0 * map_size.1];
+    let mut light_int: Vec<u8> = vec![0; map_size.0 * map_size.1 * 2];
     torches_pos.into_iter().for_each(|light_pos| {
         lightq.push_front(light_pos);
         light_int[light_pos] = 15;
@@ -197,13 +302,14 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     while !lightq.is_empty() {
         let node = *lightq.front().expect("Queue is empty");
         lightq.pop_front();
-        let x = node % map_size.0;
-        let y = node / map_size.0;
+        let x = node % (map_size.0);
+        let y = (node / map_size.0) % map_size.1;
+        let z = node / (map_size.0 * map_size.1);
         let light_node = light_int[node];
 
         //negative x neighbor
         if x > 0 {
-            let neighbor = x - 1 + y * map_size.0;
+            let neighbor = x - 1 + y * map_size.0 + z * map_size.0 * map_size.1;
             if !map[neighbor]
                 && light_int[neighbor] <= light_node - 2
                 && light_node != 0
@@ -216,7 +322,7 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
 
         //Positive x neighbor
         if x < map_size.0 - 1 {
-            let neighbor = x + 1 + y * map_size.0;
+            let neighbor = x + 1 + y * map_size.0 + z * map_size.0 * map_size.1;
             if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
                 light_int[neighbor] = light_node - 1;
                 lightq.push_back(neighbor);
@@ -225,7 +331,7 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
 
         //negative y neighbor
         if y > 0 {
-            let neighbor = x + (y - 1) * map_size.0;
+            let neighbor = x + (y - 1) * map_size.0 + z * map_size.0 * map_size.1;
             if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
                 light_int[neighbor] = light_node - 1;
                 lightq.push_back(neighbor);
@@ -234,7 +340,23 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
 
         //Positive y neighbor
         if y < map_size.1 - 1 {
-            let neighbor = x + (y + 1) * map_size.0;
+            let neighbor = x + (y + 1) * map_size.0 + z * map_size.0 * map_size.1;
+            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
+            }
+        }
+        // up neighbor
+        if z > 0 {
+            let neighbor = x + y * map_size.0 + (z - 1) * map_size.0 * map_size.1;
+            if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
+                light_int[neighbor] = light_node - 1;
+                lightq.push_back(neighbor);
+            }
+        }
+        // down neighbor
+        if z < 1 {
+            let neighbor = x + y * map_size.0 + (z + 1) * map_size.0 * map_size.1;
             if !map[neighbor] && light_int[neighbor] <= light_node - 2 && light_node != 1 {
                 light_int[neighbor] = light_node - 1;
                 lightq.push_back(neighbor);
@@ -244,30 +366,28 @@ pub fn lighting(torches_pos: Vec<usize>, map: &[bool], map_size: (usize, usize))
     light_int
 }
 #[inline(always)]
-    unsafe fn bilerp(x: f32, y: f32, vertices: &[f32]) -> f32 {
-        let x2 = 128.0 - x;
-        let y2 = 128.0 - y;
+unsafe fn bilerp(x: f32, y: f32, v1: f32, v2: f32, v3: f32, v4: f32) -> f32 {
+    let x2 = 127.0 - x;
+    let y2 = 127.0 - y;
 
-      
-        let v_a1 = _mm_loadu_ps(&vertices[0]); //[bottom left,bottom right, top left, top right]
-        let v_a2 = _mm_set_ps(x,y,x,x2);
-        let v_a3 = _mm_set_ps(y,x2,y2,y2);
+    let v_a1 = _mm_set_ps(v4, v3, v2, v1); //[bottom left,bottom right, top left, top right]
+    let v_a2 = _mm_set_ps(x, y, x, x2);
+    let v_a3 = _mm_set_ps(y, x2, y2, y2);
 
-        let m = _mm_mul_ps(v_a1,_mm_mul_ps(v_a2,v_a3));
-        let t1 = _mm_hadd_ps(m, m);
-        _mm_cvtss_f32(_mm_hadd_ps(t1, t1))
-    }
+    let m = _mm_mul_ps(v_a1, _mm_mul_ps(v_a2, v_a3));
+    let t1 = _mm_hadd_ps(m, m);
+    _mm_cvtss_f32(_mm_hadd_ps(t1, t1))
+}
 
-    #[inline(always)]
+#[inline(always)]
 unsafe fn lerp(x: f32, l: f32, r: f32) -> f32 {
-    let x2 = 128.0 - x;
-    let v_a1 =_mm_set_ps(0.0,0.0,r,l);
-    let v_a2 =_mm_set_ps(0.0,0.0,x,x2);
-    let t1 = _mm_mul_ps(v_a1,v_a2);
-    _mm_cvtss_f32(_mm_hadd_ps(t1, t1))*128.0
+    let x2 = 127.0 - x;
+    let v_a1 = _mm_set_ps(0.0, 0.0, r, l);
+    let v_a2 = _mm_set_ps(0.0, 0.0, x, x2);
+    let t1 = _mm_mul_ps(v_a1, v_a2);
+    _mm_cvtss_f32(_mm_hadd_ps(t1, t1)) * 127.0
 
-
-   // (l * x2 + x * r) * 128.0
+    //(l * x2 + x * r) * 127.0
 }
 
 #[inline(always)]
@@ -284,33 +404,34 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub fn new(pos: [usize; 2], map_size: (usize, usize), lighting: &[f32]) -> Self {
+    pub fn new(pos: [usize; 3], map_size: (usize, usize), lighting: &[f32]) -> Self {
         let x = pos[0];
         let y = pos[1];
+        let z = pos[2];
         let neighbor1 = {
             if x > 0 && y < map_size.1 {
-                lighting[x - 1 + map_size.0 * y]
+                lighting[x - 1 + map_size.0 * y + z * map_size.0 * map_size.1]
             } else {
                 0.0
             }
         };
         let neighbor2 = {
             if x < map_size.0 && y < map_size.1 {
-                lighting[x + map_size.0 * y]
+                lighting[x + map_size.0 * y + z * map_size.0 * map_size.1]
             } else {
                 0.0
             }
         };
         let neighbor3 = {
             if y > 0 && x < map_size.0 {
-                lighting[x + map_size.0 * (y - 1)]
+                lighting[x + map_size.0 * (y - 1) + z * map_size.0 * map_size.1]
             } else {
                 0.0
             }
         };
         let neighbor4 = {
             if y > 0 && x > 0 {
-                lighting[x - 1 + map_size.0 * (y - 1)]
+                lighting[x - 1 + map_size.0 * (y - 1) + z * map_size.0 * map_size.1]
             } else {
                 0.0
             }

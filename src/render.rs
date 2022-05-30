@@ -1,4 +1,9 @@
-use crate::{MainState, utilities::{vector2::Vector2, math::ffmin}, Intersection, Orientation, map::Type, sprite::Sprite, lighting::Lighting};
+use crate::{
+    map::Type,
+    sprite::Sprite,
+    utilities::{math::ffmin, vector2::Vector2},
+    MainState, Orientation,
+};
 const RAYSPERPIXEL: usize = 2;
 
 #[inline(always)]
@@ -70,10 +75,9 @@ pub fn calculate_ray(
             && map_checkv.y >= 0.0
             && map_checkv.y < ms.map_size.1 as f32
         {
-            wall_type =
-                ms.map.walls[map_checkv.y as usize * ms.map_size.0 + map_checkv.x as usize];
+            wall_type = ms.map.walls[map_checkv.y as usize * ms.map_size.0 + map_checkv.x as usize];
 
-            if last_was_door && wall_type as usize> 0 {
+            if last_was_door && wall_type as usize > 0 {
                 wall_type = Type::FrameWoodenDoor;
             }
             last_was_door = false;
@@ -110,27 +114,25 @@ pub fn calculate_ray(
                         wall_type = Type::FrameWoodenDoor;
                         distance = ray_length1_d.x;
                     }
-                } else {
-                    if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
-                        distance = ray_length1_d.x - ray_unitstep_size.x * 0.5;
-                        if door_offset < 1.0 {
-                            let pos_y = (startv.y + ray_dir_norm.y * distance).fract();
-                            if pos_y > door_offset * 0.5 && 1.0 - pos_y > door_offset * 0.5 {
-                                last_was_door = true;
-                                tilefound = false;
-                            }
+                } else if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
+                    distance = ray_length1_d.x - ray_unitstep_size.x * 0.5;
+                    if door_offset < 1.0 {
+                        let pos_y = (startv.y + ray_dir_norm.y * distance).fract();
+                        if pos_y > door_offset * 0.5 && 1.0 - pos_y > door_offset * 0.5 {
+                            last_was_door = true;
+                            tilefound = false;
                         }
-                    } else {
-                        if ray_dir_norm.y < 0.0 {
-                            orientation = Orientation::S;
-                            map_checkv.y -= 1.0;
-                        } else {
-                            orientation = Orientation::N;
-                            map_checkv.y += 1.0;
-                        }
-                        wall_type = Type::FrameWoodenDoor;
-                        distance = ray_length1_d.y;
                     }
+                } else {
+                    if ray_dir_norm.y < 0.0 {
+                        orientation = Orientation::S;
+                        map_checkv.y -= 1.0;
+                    } else {
+                        orientation = Orientation::N;
+                        map_checkv.y += 1.0;
+                    }
+                    wall_type = Type::FrameWoodenDoor;
+                    distance = ray_length1_d.y;
                 }
             } else if wall_type == Type::Cowbeb || wall_type == Type::MetalBars {
                 let mut offset = 0.0;
@@ -150,11 +152,11 @@ pub fn calculate_ray(
                     transparent_walls.push(Intersection::new(
                         (startv + ray_dir_norm * distance).to_array(),
                         distance,
-                        (map_checkv.y) as usize * ms.map_size.0
-                            + (map_checkv.x + offset) as usize,
-                        orientation.clone(),
+                        (map_checkv.y) as usize * ms.map_size.0 + (map_checkv.x + offset) as usize,
+                        orientation,
                         ms.map.walls[(map_checkv.y) as usize * ms.map_size.0
                             + (map_checkv.x + offset) as usize] as usize,
+                        true,
                     ));
                 } else {
                     if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
@@ -172,49 +174,49 @@ pub fn calculate_ray(
                     transparent_walls.push(Intersection::new(
                         (startv + ray_dir_norm * distance).to_array(),
                         distance,
-                        (map_checkv.y + offset) as usize * ms.map_size.0
-                            + (map_checkv.x) as usize,
-                        orientation.clone(),
+                        (map_checkv.y + offset) as usize * ms.map_size.0 + (map_checkv.x) as usize,
+                        orientation,
                         ms.map.walls[(map_checkv.y + offset) as usize * ms.map_size.0
                             + (map_checkv.x) as usize] as usize,
+                        true,
                     ));
                 }
-            } else if wall_type == Type::Stairs  {
+            } else if wall_type == Type::Stairs {
                 transparent_walls.push(Intersection::new(
                     (startv + ray_dir_norm * distance).to_array(),
                     distance,
                     (map_checkv.y) as usize * ms.map_size.0 + (map_checkv.x) as usize,
-                    orientation.clone(),
+                    orientation,
                     wall_type as usize,
+                    false,
                 ));
-            } else if wall_type as usize> 0 && wall_type != Type::Stairs2 {
+            } else if wall_type as usize > 0 && wall_type != Type::Stairs2 {
                 tilefound = true;
             }
             if ((orientation == Orientation::W || orientation == Orientation::E)
-                && ms.map.walls[map_checkv.y as usize * ms.map_size.0
-                    + (map_checkv.x - stepv.x) as usize]
+                && ms.map.walls
+                    [map_checkv.y as usize * ms.map_size.0 + (map_checkv.x - stepv.x) as usize]
                     == Type::WoodenDoor)
                 || ((orientation == Orientation::N || orientation == Orientation::S)
-                    && ms.map.walls[(map_checkv.y - stepv.y) as usize * ms.map_size.0
-                        + map_checkv.x as usize]
+                    && ms.map.walls
+                        [(map_checkv.y - stepv.y) as usize * ms.map_size.0 + map_checkv.x as usize]
                         == Type::WoodenDoor)
             {
                 wall_type = Type::FrameWoodenDoor;
             }
 
-            if ms.player.current_wall==Type::Stairs{
-                let m = ray_dir_norm.y/ray_dir_norm.x;
+            if ms.player.current_wall == Type::Stairs {
+                let m = ray_dir_norm.y / ray_dir_norm.x;
                 let pos_x0 = ms.player.pos.x.floor();
-                let iy = m * (pos_x0-ms.player.pos.x)+ms.player.pos.y; // intersection y with the first step
-                        let distance =-ms.player.pos.x.fract()*(1.0
-                            + m *m)
-                            .sqrt();
+                let iy = m * (pos_x0 - ms.player.pos.x) + ms.player.pos.y; // intersection y with the first step
+                let distance = -ms.player.pos.x.fract() * (1.0 + m * m).sqrt();
                 transparent_walls.push(Intersection::new(
                     [pos_x0, iy],
                     distance,
                     (startv.y) as usize * ms.map_size.0 + (startv.x) as usize,
                     Orientation::E,
                     12,
+                    false,
                 ));
             }
             if tilefound {
@@ -230,6 +232,7 @@ pub fn calculate_ray(
             map_checkv.y as usize * ms.map_size.0 + map_checkv.x as usize,
             orientation,
             wall_type as usize,
+            false,
         ),
         transparent_walls,
     )
@@ -237,20 +240,29 @@ pub fn calculate_ray(
 
 #[inline(always)]
 pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
-    let (intersection, transparent_walls) =
-        calculate_ray(ms,ms.player.dir_norm, ms.angles[j]);
+    let (intersection, transparent_walls) = calculate_ray(ms, ms.player.dir_norm, ms.angles[j]);
 
     let corrected_distance = intersection.distance * ms.angles[j].cos();
     let pos_z = ms.player.jump / corrected_distance + ms.player.pitch;
 
     let rect_h = (ms.player.planedist / corrected_distance * 100.0).round() / 100.0;
-    let rect_ceiling = -rect_h+(h - rect_h) * 0.5;
-    let rect_floor = (h + rect_h) * 0.5;
-
-    draw_wall(ms, slice, h, &intersection, h * 0.5, rect_h, &pos_z,&ms.lighting_1,);
-    draw_wall(ms, slice, h, &intersection,  h * 0.5
-        - ms.player.planedist
-            / (corrected_distance), rect_h, &(ms.player.jump / corrected_distance + ms.player.pitch),&ms.lighting_2,);
+    let rect_ceiling = -rect_h + (h - rect_h) * 0.5;
+    let mut rect_floor = (h + rect_h) * 0.5;
+    
+    if ms.player.jump*2.0>ms.player.planedist{
+        rect_floor = (rect_floor - rect_h).max(-pos_z);
+    } else{
+    draw_wall(ms, slice, h, &intersection, h * 0.5, rect_h, &pos_z);
+    }
+    draw_wall(
+        ms,
+        slice,
+        h,
+        &intersection,
+        h * 0.5 - ms.player.planedist / (corrected_distance),
+        rect_h,
+        &(ms.player.jump / corrected_distance + ms.player.pitch),
+    );
 
     //draw floor
     for y in (pos_z + rect_floor) as usize..(h) as usize {
@@ -263,31 +275,28 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
             let current_floor_x = weight * intersection.point[0] + rhs.x;
             let current_floor_y = weight * intersection.point[1] + rhs.y;
 
-            let location =
-            unsafe{
-                current_floor_x.to_int_unchecked::<usize>() + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0}; //Cant be negative
+            let location = unsafe {
+                current_floor_x.to_int_unchecked::<usize>()
+                    + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0
+            }; //Cant be negative
             let floor_type = ms.map.floors[location];
-            let ftx =  unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
+            let ftx = unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
             let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
-            let lighting = ms.lighting_1.get_lighting_floor(
-                ftx as f32,
-                fty as f32,
-                location,
-            );
+            let lighting = ms
+                .lighting_1
+                .get_lighting_floor(ftx as f32, fty as f32, location);
             ms.screen.draw_texture(
                 slice,
                 [ftx, (floor_type * 128) + fty],
                 y,
                 ms.torch.intensity * lighting,
-                ffmin(3.0 / (current_dist * current_dist),1.5),
+                ffmin(3.0 / (current_dist * current_dist), 1.5),
             )
         }
     }
     //draw ceiling
-    let mut rect_top_draw = rect_ceiling;
-    if rect_ceiling + pos_z > h {
-        rect_top_draw = h - pos_z;
-    }
+    let rect_top_draw = rect_ceiling.min(h-pos_z);
+
     for y in 0..(rect_top_draw + pos_z) as usize {
         let current_dist = ms.buffer_floors[y];
         let weight = current_dist / corrected_distance;
@@ -296,33 +305,34 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
         let current_floor_x = weight * intersection.point[0] + rhs.x;
         let current_floor_y = weight * intersection.point[1] + rhs.y;
 
-        let location =
-            unsafe{
-                current_floor_x.to_int_unchecked::<usize>() + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0};
+        let location = unsafe {
+            current_floor_x.to_int_unchecked::<usize>()
+                + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0
+        };
 
-            let ftx =  unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 };
-            let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 };
+        let ftx = unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 };
+        let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 };
 
-         ms.screen.draw_texture(
+        ms.screen.draw_texture(
             slice,
             [ftx, 1152 + fty],
             y,
             ms.torch.intensity
-                * ms.lighting_2.get_lighting_floor(
+                * ms.lighting_1.get_lighting_floor(
                     ftx as f32,
                     fty as f32,
-                    location,
+                    location + ms.map_size.0 * ms.map_size.1,
                 ),
-            ffmin(3.0 / (current_dist * current_dist),1.5),
+            ffmin(3.0 / (current_dist * current_dist), 1.5),
         );
         //ms.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
     }
     if !&transparent_walls.is_empty() {
         let mut twandsp = transparent_walls
             .into_iter()
-            .map(|e| TWandSprites::TW(e))
+            .map(TWandSprites::TW)
             .collect::<Vec<_>>();
-        twandsp.extend(ms.sprites.iter().map(|e| TWandSprites::Sprites(e)));
+        twandsp.extend(ms.sprites.iter().map(TWandSprites::Sprites));
 
         twandsp.sort_by(|a, b| {
             b.distance2()
@@ -341,47 +351,40 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                             ms,
                             slice,
                             h,
-                            &tw,
+                            tw,
                             h * 0.5,
                             ms.player.planedist / tw_corrected_distance,
                             &(ms.player.pitch + ms.player.jump / tw_corrected_distance),
-                            &ms.lighting_1,
                         )
                     } else if tw.wall_type == 12
-                        && (tw.orientation == Orientation::W
-                            || tw.orientation == Orientation::E)
+                        && (tw.orientation == Orientation::W || tw.orientation == Orientation::E)
                     {
-            
-                        let m = (ms.player.pos.y - tw.point[1])
-                            / (ms.player.pos.x - tw.point[0]); //slope of the line
-                        let iy = m * (tw.point[0] + 1.0 / 4.0 - ms.player.pos.x)
-                            + ms.player.pos.y; // intersection y with the first step
-                        let delta_distance = (1.0 / (4.0 * 4.0)
-                            + (iy - tw.point[1]) * (iy - tw.point[1]))
-                            .sqrt(); // distance between steps
-                            let start =  if ms.player.current_wall==Type::Stairs{
-                                (ms.player.pos.x.fract()*4.0).ceil() as usize
-                            }else{
-                                    1
-                                };
+                        let m = (ms.player.pos.y - tw.point[1]) / (ms.player.pos.x - tw.point[0]); //slope of the line
+                        let iy = m * (tw.point[0] + 1.0 / 4.0 - ms.player.pos.x) + ms.player.pos.y; // intersection y with the first step
+                        let delta_distance =
+                            (1.0 / (4.0 * 4.0) + (iy - tw.point[1]) * (iy - tw.point[1])).sqrt(); // distance between steps
+                        let start = if ms.player.current_wall == Type::Stairs {
+                            (ms.player.pos.x.fract() * 4.0).ceil() as usize
+                        } else {
+                            1
+                        };
                         for i in (start..8).rev() {
                             let tw2 = Intersection::new(
                                 [
                                     tw.point[0] + 1.0 * (i as f32) / 4.0,
-                                    m * (tw.point[0] + 1.0 * (i as f32) / 4.0
-                                        - ms.player.pos.x)
+                                    m * (tw.point[0] + 1.0 * (i as f32) / 4.0 - ms.player.pos.x)
                                         + ms.player.pos.y,
                                 ],
                                 tw.distance + delta_distance * (i as f32),
                                 tw.map_checkv,
                                 Orientation::E,
                                 12,
+                                false,
                             );
-                            if tw2.point[1] > tw.point[1] -5.0
-                                && tw2.point[1] < tw.point[1] +5.0
+                            if tw2.point[1] > tw.point[1] - 5.0 && tw2.point[1] < tw.point[1] + 5.0
                             {
-                                if ms.map.walls[tw2.point[0] as usize 
-                                    + tw2.point[1] as usize * ms.map_size.0]
+                                if ms.map.walls
+                                    [tw2.point[0] as usize + tw2.point[1] as usize * ms.map_size.0]
                                     == Type::Stairs
                                     || ms.map.walls[tw2.point[0] as usize
                                         + tw2.point[1] as usize * ms.map_size.0]
@@ -399,16 +402,12 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                         1.0 / 8.0 * ms.player.planedist
                                             / (tw2.distance * ms.angles[j].cos()),
                                         &(ms.player.pitch
-                                            + ms.player.jump
-                                                / (tw2.distance * ms.angles[j].cos())),
-                                                &ms.lighting_1,
+                                            + ms.player.jump / (tw2.distance * ms.angles[j].cos())),
                                     );
                                     for y in (ms.player.pitch
-                                        + ms.player.jump
-                                            / (tw2.distance * ms.angles[j].cos())
+                                        + ms.player.jump / (tw2.distance * ms.angles[j].cos())
                                         + h * 0.5
-                                        + ms.player.planedist
-                                            / (tw2.distance * ms.angles[j].cos())
+                                        + ms.player.planedist / (tw2.distance * ms.angles[j].cos())
                                             * ((3.0 - i as f32) / 8.0 + 1.0 / 8.0))
                                         as usize
                                         ..(ms.player.pitch
@@ -419,7 +418,8 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                             + ms.player.planedist
                                                 / ((tw2.distance - delta_distance)
                                                     * ms.angles[j].cos())
-                                                * ((4.0 - i as f32) / 8.0)).min(h)
+                                                * ((4.0 - i as f32) / 8.0))
+                                            .min(h)
                                             as usize
                                     {
                                         let current_dist = (ms.player.planedist
@@ -434,10 +434,8 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                         let current_floor_y =
                                             weight * intersection.point[1] + rhs.y;
 
-                                        let ftx =
-                                            (current_floor_x * ms.cell_size) as usize % 128;
-                                        let fty =
-                                            (current_floor_y * ms.cell_size) as usize % 128;
+                                        let ftx = (current_floor_x * ms.cell_size) as usize % 128;
+                                        let fty = (current_floor_y * ms.cell_size) as usize % 128;
                                         /*let lighting = ms.lighting.get_lighting_floor(
                                             ftx as f32 / 128.0,
                                             fty as f32 / 128.0,
@@ -480,10 +478,8 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                         let current_floor_y =
                                             weight * intersection.point[1] + rhs.y;
 
-                                        let ftx =
-                                            (current_floor_x * ms.cell_size) as usize % 128;
-                                        let fty =
-                                            (current_floor_y * ms.cell_size) as usize % 128;
+                                        let ftx = (current_floor_x * ms.cell_size) as usize % 128;
+                                        let fty = (current_floor_y * ms.cell_size) as usize % 128;
                                         /*let lighting = ms.lighting.get_lighting_floor(
                                             ftx as f32 / 128.0,
                                             fty as f32 / 128.0,
@@ -494,7 +490,7 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                             [ftx, (0 * 128) + fty],
                                             y,
                                             0.05,
-                                            ffmin(3.0 / (current_dist * current_dist),1.5),
+                                            ffmin(3.0 / (current_dist * current_dist), 1.5),
                                         )
                                     }
                                 }
@@ -504,21 +500,19 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                             ms,
                             slice,
                             h,
-                            &tw,
-                            h * 0.5
-                                + ms.player.planedist / tw_corrected_distance * 7.0 / 16.0,
+                            tw,
+                            h * 0.5 + ms.player.planedist / tw_corrected_distance * 7.0 / 16.0,
                             1.0 / 8.0 * ms.player.planedist / tw_corrected_distance,
                             &(ms.player.pitch + ms.player.jump / tw_corrected_distance),
-                            &ms.lighting_1,
                         );
                     }
                 }
             }
         });
     } else {
-        ms.sprites.iter().for_each(|sprite| {
-            sprite.draw(slice, &ms.player, j, &ms.screen, corrected_distance)
-        });
+        ms.sprites
+            .iter()
+            .for_each(|sprite| sprite.draw(slice, &ms.player, j, &ms.screen, corrected_distance));
     }
 }
 
@@ -531,7 +525,6 @@ fn draw_wall(
     center: f32,
     height: f32,
     pos_z: &f32,
-    lighting_wall: &Lighting,
 ) {
     //TODO: REMOVE THIS IF
     let ty_step = {
@@ -541,6 +534,9 @@ fn draw_wall(
             (ms.cell_size) / (height)
         }
     };
+    let up = center < h * 0.5 - 1.0;
+
+    let z = if up{ ms.map_size.0 * ms.map_size.1 } else { 0 };
 
     let inter_x = intersection.point[0].fract();
     let inter_y = intersection.point[1].fract();
@@ -567,27 +563,22 @@ fn draw_wall(
         }
     };
 
-    let mut tx;
-    match intersection.orientation {
+    let mut tx = match intersection.orientation {
         Orientation::N => {
-            tx = inter_x * ms.cell_size;
-            tx = ms.cell_size - 1.0 - tx.floor();
+            let tx_temp = inter_x * ms.cell_size;
+            ms.cell_size - 1.0 - tx_temp.floor()
         }
-        Orientation::E => {
-            tx = inter_y * ms.cell_size;
-        }
-        Orientation::S => {
-            tx = inter_x * ms.cell_size;
-        }
+        Orientation::E => inter_y * ms.cell_size,
+        Orientation::S => inter_x * ms.cell_size,
         Orientation::W => {
-            tx = inter_y * ms.cell_size;
-            tx = ms.cell_size - 1.0 - tx.floor();
+            let tx_temp = inter_y * ms.cell_size;
+            ms.cell_size - 1.0 - tx_temp.floor()
         }
-    }
+    };
+
     if intersection.wall_type == 6 {
         let offset = 1.0
-            - ms
-                .map
+            - ms.map
                 .doors
                 .get(&intersection.map_checkv)
                 .expect("error to draw door")
@@ -623,6 +614,10 @@ fn draw_wall(
             }
         }
     }
+    let mut wall_type = intersection.wall_type;
+    if wall_type == 8 && up {
+        wall_type = 4;
+    }
 
     for y in (pos_z + rect_top) as usize..(pos_z + rect_bottom_draw) as usize {
         //TODO: FIX THIS FLOAT POINT ROUNDING ERROR
@@ -638,22 +633,62 @@ fn draw_wall(
             );
             ty = 127.0;
         }
-unsafe{
-        ms.screen.draw_texture(
-            slice,
-            [tx.to_int_unchecked::<usize>(), intersection.wall_type * 128 + ty.to_int_unchecked::<usize>()],
-            y,
+
+        let texture_position = unsafe {
+            [
+                tx.to_int_unchecked::<usize>(),
+                wall_type * 128 + ty.to_int_unchecked::<usize>(),
+            ]
+        };
+        let shade = unsafe {
             ms.torch.intensity
-                * lighting_wall.get_lighting_wall(
-                    tx ,
+                * ms.lighting_1.get_lighting_wall(
+                    tx,
                     ty * 3.0, //*3.0/128.0
-                    intersection.map_checkv,
+                    intersection.map_checkv + z,
                     &intersection.orientation,
-                ),
-            ffmin(3.0 / (intersection.distance * intersection.distance),1.5),
-        );
-    }
+                    up,
+                )
+        };
+        let flashlight = ffmin(3.0 / (intersection.distance * intersection.distance), 1.5);
+
+        if intersection.is_transparent {
+            ms.screen
+                .draw_transparent_texture(slice, texture_position, y, shade, flashlight);
+        } else {
+            ms.screen
+                .draw_texture(slice, texture_position, y, shade, flashlight);
+        }
         ty += ty_step;
+    }
+}
+
+pub struct Intersection {
+    point: [f32; 2],
+    distance: f32,
+    map_checkv: usize,
+    orientation: Orientation,
+    wall_type: usize,
+    is_transparent: bool,
+}
+
+impl Intersection {
+    pub fn new(
+        point: [f32; 2],
+        distance: f32,
+        map_checkv: usize,
+        orientation: Orientation,
+        wall_type: usize,
+        is_transparent: bool,
+    ) -> Self {
+        Self {
+            point,
+            distance,
+            map_checkv,
+            orientation,
+            wall_type,
+            is_transparent,
+        }
     }
 }
 

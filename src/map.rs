@@ -214,8 +214,8 @@ fn get_drawparam(
         .src(Rect::new(x_start, y_start, width, height))
 }
 #[allow(dead_code)]
-#[derive(Copy,Clone,PartialEq)]
-pub enum Type{
+#[derive(Copy, Clone, PartialEq)]
+pub enum Type {
     TiledFloor = 0,
     Moss = 1,
     Brick = 2,
@@ -230,5 +230,4 @@ pub enum Type{
     MetalBars = 11,
     Stairs = 12,
     Stairs2 = 13,
-
 }

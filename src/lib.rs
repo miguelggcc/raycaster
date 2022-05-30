@@ -9,10 +9,10 @@ mod door;
 mod lighting;
 mod map;
 mod player;
+mod render;
 mod screen;
 mod sprite;
 mod utilities;
-mod render;
 use lighting::{Lighting, Torch};
 use map::{Map, Type};
 use num::clamp;
@@ -41,7 +41,6 @@ pub struct MainState {
     screen: Screen,
     sprites: Vec<Sprite>,
     lighting_1: Lighting,
-    lighting_2: Lighting,
     torch: Torch,
     sounds: Sound,
 }
@@ -53,7 +52,7 @@ impl MainState {
         let pos = Vector2::new(8.5, 12.5);
         let dir_norm = Vector2::new(0.0f32, -1.0); // Player direction
         let plane = Vector2::new((FOV.to_radians() * 0.5).tan(), 0.0); //Camera plane vector
-        let map_size = (33, 25);
+        let map_size = (40, 25);
         let cell_size = 128.0;
         let minimap = graphics::Image::new(ctx, "/minimap.png")?;
         let minimap_sb =
@@ -105,7 +104,7 @@ impl MainState {
 
         let sprite_textures = graphics::Image::new(ctx, "/sprite128.png")?.to_rgba8(ctx)?;
 
-        let mut screen = unsafe{Screen::new(h, w, 128, 128 * 8)};
+        let mut screen = unsafe { Screen::new(h, w, 128, 128 * 8) };
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![
@@ -143,8 +142,6 @@ impl MainState {
             map_size,
         );
 
-        let lighting_2 = lighting::Lighting::from_floor(&lighting_1, map_size);
-
         let torch = lighting::Torch::default();
 
         let mut sounds = Sound::new(ctx)?;
@@ -162,7 +159,6 @@ impl MainState {
             screen,
             sprites,
             lighting_1,
-            lighting_2,
             torch,
             sounds,
         })
@@ -195,6 +191,9 @@ impl MainState {
         self.player.dir_norm = Vector2::rotate(self.player.dir_norm, angle_of_rot.to_radians());
 
         let mut dir = self.player.dir_norm * (2.5 * dt);
+        if self.player.current_wall==Type::Stairs{
+            dir*=0.4;
+        }
         let yoffset = 0.3125;
 
         self.player.walking = false;
@@ -314,17 +313,17 @@ impl MainState {
             self.player.jump -= 10.0;
         }
     }
-
-  
 }
 
 impl EventHandler for MainState {
     fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, _: KeyMods, _: bool) {
         match keycode {
-            KeyCode::L => {self.lighting_1.switch = !self.lighting_1.switch;
-                self.lighting_2.switch = !self.lighting_2.switch;},
-            KeyCode::K => {self.lighting_1.smooth_switch = !self.lighting_1.smooth_switch;
-                self.lighting_2.smooth_switch = !self.lighting_2.smooth_switch;}
+            KeyCode::L => {
+                self.lighting_1.switch = !self.lighting_1.switch;
+            }
+            KeyCode::K => {
+                self.lighting_1.smooth_switch = !self.lighting_1.smooth_switch;
+            }
             KeyCode::Escape => ggez::event::quit(ctx),
             _ => (),
         }
@@ -335,10 +334,17 @@ impl EventHandler for MainState {
 
         self.handle_input(ctx);
 
-        self.player.update(self.map.walls[self.player.pos.x as usize +self.player.pos.y as usize *self.map_size.0],&self.buffer_walking, time);
+        self.player.update(
+            self.map.walls
+                [self.player.pos.x as usize + self.player.pos.y as usize * self.map_size.0],
+            &self.buffer_walking,
+            time,
+        );
 
-        if self.map.walls[self.player.pos.x as usize + self.player.pos.y as usize*self.map_size.0]==Type::Stairs{
-            self.player.height = (self.player.pos.x.fract())*self.player.planedist;
+        if self.map.walls[self.player.pos.x as usize + self.player.pos.y as usize * self.map_size.0]
+            == Type::Stairs
+        {
+            self.player.height = (self.player.pos.x.fract()) * self.player.planedist;
         }
 
         if self.player.walking {
@@ -347,10 +353,8 @@ impl EventHandler for MainState {
             } else if !self.sounds.walking.playing() {
                 self.sounds.walking.play_later().unwrap();
             }
-        } else {
-            if self.sounds.walking.playing() {
-                self.sounds.walking.pause();
-            }
+        } else if self.sounds.walking.playing() {
+            self.sounds.walking.pause();
         }
 
         self.sprites
@@ -370,7 +374,7 @@ impl EventHandler for MainState {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let (w, h) = graphics::drawable_size(ctx);
-        graphics::clear(ctx, Color::BLACK);
+        graphics::clear(ctx, Color::MAGENTA);
         /*let mut corr_angle = self.player.dir_norm.angle();
         if corr_angle < 0.0 {
             corr_angle += 2.0 * PI;
@@ -388,15 +392,20 @@ impl EventHandler for MainState {
         graphics::draw(ctx, &self.sky.sb, draw_param)?;*/
 
         (0..h as usize).for_each(|y| {
-            if y < (self.player.pitch + h ) as usize {
+            if y < (self.player.pitch + h) as usize {
                 // Calculate ceiling y buffer
-                self.buffer_floors[y] = (3.0*self.player.planedist - 2.0 * self.player.jump)
+                self.buffer_floors[y] = (3.0 * self.player.planedist - 2.0 * self.player.jump)
                     / (-2.0 * (y as f32 - self.player.pitch) + h);
             }
             if y > (h * 0.5 + self.player.pitch) as usize {
                 // Calculate floor y buffer
-                self.buffer_floors[y] = (self.player.planedist + 2.0 * self.player.jump)
+                if 2.0*self.player.jump > self.player.planedist {
+                    self.buffer_floors[y] = (-self.player.planedist+2.0 * self.player.jump)
                     / (2.0 * (-self.player.pitch + y as f32) - h);
+                } else {
+                    self.buffer_floors[y] = (self.player.planedist + 2.0 * self.player.jump)
+                        / (2.0 * (-self.player.pitch + y as f32) - h);
+                }
             }
         });
 
@@ -416,11 +425,11 @@ impl EventHandler for MainState {
             .par_chunks_mut(h as usize * 4 * RAYSPERPIXEL)
             .enumerate()
             .for_each(|(j, slice)| {
-                render::draw_slice(&self, slice, w as usize / RAYSPERPIXEL - j - 1, h);
+                render::draw_slice(self, slice, w as usize / RAYSPERPIXEL - j - 1, h);
                 let (slice1, slice2) = slice.split_at_mut(h as usize * 4);
                 slice2
                     .chunks_mut(h as usize * 4)
-                    .for_each(|sub_slice2| sub_slice2.copy_from_slice(&slice1))
+                    .for_each(|sub_slice2| sub_slice2.copy_from_slice(slice1))
             });
         /*img_arr.par_chunks_mut(h as usize * 4 * RAYSPERPIXEL). for_each(|slice|{
             let (slice1, slice2) =  slice.split_at_mut(h as usize * 2 * RAYSPERPIXEL);
@@ -461,31 +470,7 @@ pub fn draw_fps_counter(ctx: &mut Context) -> GameResult<()> {
             .color(graphics::Color::WHITE),
     )
 }
-pub struct Intersection {
-    point: [f32; 2],
-    distance: f32,
-    map_checkv: usize,
-    orientation: Orientation,
-    wall_type: usize,
-}
 
-impl Intersection {
-    pub fn new(
-        point: [f32; 2],
-        distance: f32,
-        map_checkv: usize,
-        orientation: Orientation,
-        wall_type: usize,
-    ) -> Self {
-        Self {
-            point,
-            distance,
-            map_checkv,
-            orientation,
-            wall_type,
-        }
-    }
-}
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Orientation {
     N = 1,
@@ -493,7 +478,6 @@ pub enum Orientation {
     S = 3,
     W = 4,
 }
-
 
 #[allow(dead_code)]
 pub struct Sky {
