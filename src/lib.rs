@@ -108,20 +108,50 @@ impl MainState {
         screen.textures(wall_textures, sprite_textures);
 
         let sprites = vec![
-            Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5)),
+            Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 7.5), 0.0),
             //Sprite::new(sprite::SpriteType::Armor, Vector2::new(7.5, 9.5)),
             //Sprite::new(sprite::SpriteType::CandleHolder, Vector2::new(12.5, 12.5)),
             //Sprite::new(sprite::SpriteType::Bat, Vector2::new(6.5, 12.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(13.5, 1.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(8.5, 24.0 - 0.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(2.048, 3.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(16.0 - 0.048, 6.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.5, 24.0 - 0.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(24.5, 1.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(30.5, 1.048)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(27.0 - 0.048, 8.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5)),
-            Sprite::new(sprite::SpriteType::Torch, Vector2::new(32.0 - 0.048, 8.5)),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(13.5, 1.048), 0.0),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(8.5, 24.0 - 0.048),
+                0.0,
+            ),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(2.048, 3.5), 0.0),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(16.0 - 0.048, 6.5),
+                0.0,
+            ),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(28.5, 24.0 - 0.048),
+                0.0,
+            ),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(24.5, 1.048), 0.0),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(30.5, 1.048), 0.0),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(27.0 - 0.048, 8.5),
+                0.0,
+            ),
+            Sprite::new(sprite::SpriteType::Torch, Vector2::new(28.048, 8.5), 0.0),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(32.0 - 0.048, 8.5),
+                0.0,
+            ),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(39.0 - 0.048, 20.5),
+                -player.planedist,
+            ),
+            Sprite::new(
+                sprite::SpriteType::Torch,
+                Vector2::new(39.0 - 0.048, 10.5),
+                -player.planedist,
+            ),
             //Sprite::new(sprite::SpriteType::Gore, Vector2::new(13.0, 3.0)),
         ];
 
@@ -137,6 +167,8 @@ impl MainState {
                 26 + map_size.0 * 8,
                 28 + map_size.0 * 8,
                 31 + map_size.0 * 8,
+                39 + map_size.0 * 10 + map_size.0 * map_size.1,
+                39 + map_size.0 * 20 + map_size.0 * map_size.1,
             ],
             &map.solid,
             map_size,
@@ -191,8 +223,8 @@ impl MainState {
         self.player.dir_norm = Vector2::rotate(self.player.dir_norm, angle_of_rot.to_radians());
 
         let mut dir = self.player.dir_norm * (2.5 * dt);
-        if self.player.current_wall==Type::Stairs{
-            dir*=0.4;
+        if self.player.current_wall == Type::Stairs {
+            dir *= 0.4;
         }
         let yoffset = 0.3125;
 
@@ -392,12 +424,10 @@ impl EventHandler for MainState {
         graphics::draw(ctx, &self.sky.sb, draw_param)?;*/
 
         (0..h as usize).for_each(|y| {
-            if y < (self.player.pitch + h) as usize {
-                // Calculate ceiling y buffer
-                self.buffer_floors[y] = (3.0 * self.player.planedist - 2.0 * self.player.jump)
-                    / (-2.0 * (y as f32 - self.player.pitch) + h);
-            }
-            if y > (h * 0.5 + self.player.pitch) as usize {
+            // Calculate ceiling y buffer
+            self.buffer_floors[y] = 1.0 / (2.0 * (y as f32 - self.player.pitch) - h);
+
+            /*if y > (h * 0.5 + self.player.pitch) as usize {
                 // Calculate floor y buffer
                 if 2.0*self.player.jump > self.player.planedist {
                     self.buffer_floors[y] = (-self.player.planedist+2.0 * self.player.jump)
@@ -406,7 +436,7 @@ impl EventHandler for MainState {
                     self.buffer_floors[y] = (self.player.planedist + 2.0 * self.player.jump)
                         / (2.0 * (-self.player.pitch + y as f32) - h);
                 }
-            }
+            }*/
         });
 
         self.sprites

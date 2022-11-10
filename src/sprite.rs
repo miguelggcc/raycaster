@@ -9,6 +9,7 @@ const TEX_SIZE: usize = 128;
 pub struct Sprite {
     pub stype: usize,
     pub pos: Vector2<f32>,
+    pub height: f32,
     pub visible: bool,
     time: f32,
     pub bounds: Bounds,
@@ -17,10 +18,11 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn new(stype: SpriteType, pos: Vector2<f32>) -> Self {
+    pub fn new(stype: SpriteType, pos: Vector2<f32>, height: f32) -> Self {
         Self {
             stype: stype as usize,
             pos,
+            height,
             visible: false,
             time: 0.0,
             bounds: Bounds::default(),
@@ -50,11 +52,17 @@ impl Sprite {
         let sprite_screen_x = (w / rays_per_pixel * 0.5) * (1.0 + transform_x / transform_y);
         let sprite_size = (player.planedist / transform_y).abs() / rays_per_pixel;
         let sprite_size_y = sprite_size * rays_per_pixel;
-        let mut start_y = -sprite_size_y * 0.5 + h * 0.5 + player.pitch + player.jump / transform_y;
+        let mut start_y = -sprite_size_y * 0.5
+            + h * 0.5
+            + player.pitch
+            + (player.jump + self.height) / transform_y;
         if start_y < 0.0 {
             start_y = 0.0;
         }
-        let mut end_y = sprite_size_y * 0.5 + h * 0.5 + player.pitch + player.jump / transform_y;
+        let mut end_y = sprite_size_y * 0.5
+            + h * 0.5
+            + player.pitch
+            + (player.jump + self.height) / transform_y;
         if end_y > h - 1.0 {
             end_y = h - 1.0;
         }
@@ -74,14 +82,16 @@ impl Sprite {
             self.visible = true;
 
             let denominator = TEX_SIZE as f32 / sprite_size_y;
-            for y in start_y as usize..1 + end_y as usize {
-                //for every pixel of the current stripe
-                let d = (y as f32) - h * 0.5 + sprite_size_y * 0.5
-                    - player.pitch
-                    - player.jump / transform_y;
+            sty = (start_y as usize..1 + end_y as usize)
+                .map(|y| {
+                    //for every pixel of the current stripe
+                    let d = (y as f32) - h * 0.5 + sprite_size_y * 0.5
+                        - player.pitch
+                        - (player.jump + self.height) / transform_y;
 
-                sty.push((d * denominator) as usize);
-            }
+                    (d * denominator) as usize
+                })
+                .collect();
 
             self.shade = {
                 if self.stype == SpriteType::Torch as usize {
@@ -139,7 +149,7 @@ impl Sprite {
             let stx = ((stripe - (-self.bounds.size as f32 * 0.5 + self.bounds.sprite_screen_x))
                 * TEX_SIZE as f32
                 / self.bounds.size) as usize;
-            if distance * distance / (cos * cos) > self.distance2 {
+            if (distance * distance) / (cos * cos) > self.distance2 {
                 for y in self.bounds.start_y as usize..1 + self.bounds.end_y as usize {
                     screen.draw_sprite(
                         slice,

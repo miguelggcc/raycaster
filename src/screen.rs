@@ -141,7 +141,7 @@ unsafe fn color_pixel(
     let v_flashlight = _mm_set1_ps(flashlight);
     let v_twofivefive = _mm_set1_epi32(255);
     let twofivefive = _mm_set_epi32(255, 0, 0, 0);
-    let  multiplicator = _mm_add_ps(
+    let multiplicator = _mm_add_ps(
         _mm_mul_ps(v_shade_col, v_shade),
         _mm_mul_ps(v_flashlight, v_flashlight_col),
     );

@@ -20,11 +20,11 @@ pub fn calculate_ray(
     let startv = ms.player.pos;
 
     let mut map_checkv = Vector2::new(startv.x.floor(), startv.y.floor());
-    let mut ray_length1_d = Vector2::new(0.0f32, 0.0);
+    let mut ray_length1_d = Vector2::new(0.0, 0.0);
     let mut orientation = Orientation::N;
     let mut wall_type = Type::TiledFloor;
     let mut transparent_walls = vec![];
-    let mut stepv = Vector2::new(0.0f32, 0.0);
+    let mut stepv = Vector2::new(0.0, 0.0);
     let mut last_was_door = false;
 
     if ray_dir_norm.x < 0.0 {
@@ -157,6 +157,7 @@ pub fn calculate_ray(
                         ms.map.walls[(map_checkv.y) as usize * ms.map_size.0
                             + (map_checkv.x + offset) as usize] as usize,
                         true,
+                        false,
                     ));
                 } else {
                     if ray_length1_d.x - 0.5 * ray_unitstep_size.x <= ray_length1_d.y {
@@ -179,6 +180,7 @@ pub fn calculate_ray(
                         ms.map.walls[(map_checkv.y + offset) as usize * ms.map_size.0
                             + (map_checkv.x) as usize] as usize,
                         true,
+                        false,
                     ));
                 }
             } else if wall_type == Type::Stairs {
@@ -188,6 +190,7 @@ pub fn calculate_ray(
                     (map_checkv.y) as usize * ms.map_size.0 + (map_checkv.x) as usize,
                     orientation,
                     wall_type as usize,
+                    false,
                     false,
                 ));
             } else if wall_type as usize > 0 && wall_type != Type::Stairs2 {
@@ -217,6 +220,7 @@ pub fn calculate_ray(
                     Orientation::E,
                     12,
                     false,
+                    false,
                 ));
             }
             if tilefound {
@@ -225,6 +229,7 @@ pub fn calculate_ray(
         }
     }
     let int_point = startv + ray_dir_norm * distance;
+    let is_up = int_point.x > 32.0;
     (
         Intersection::new(
             int_point.to_array(),
@@ -233,6 +238,7 @@ pub fn calculate_ray(
             orientation,
             wall_type as usize,
             false,
+            is_up,
         ),
         transparent_walls,
     )
@@ -248,18 +254,21 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
     let rect_h = (ms.player.planedist / corrected_distance * 100.0).round() / 100.0;
     let rect_ceiling = -rect_h + (h - rect_h) * 0.5;
     let mut rect_floor = (h + rect_h) * 0.5;
-    
-    if ms.player.jump*2.0>ms.player.planedist{
+    let mut floor_height = ms.player.planedist + 2.0 * ms.player.jump;
+    let ceiling_height = -3.0 * ms.player.planedist + 2.0 * ms.player.jump;
+
+    if ms.player.jump * 2.0 > ms.player.planedist && intersection.is_up {
         rect_floor = (rect_floor - rect_h).max(-pos_z);
-    } else{
-    draw_wall(ms, slice, h, &intersection, h * 0.5, rect_h, &pos_z);
+        floor_height -= 2.0 * ms.player.planedist;
+    } else {
+        draw_wall(ms, slice, h, &intersection, h * 0.5, rect_h, &pos_z);
     }
     draw_wall(
         ms,
         slice,
         h,
         &intersection,
-        h * 0.5 - ms.player.planedist / (corrected_distance),
+        h * 0.5 - ms.player.planedist / corrected_distance,
         rect_h,
         &(ms.player.jump / corrected_distance + ms.player.pitch),
     );
@@ -268,62 +277,29 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
     for y in (pos_z + rect_floor) as usize..(h) as usize {
         if !(j > 24 / RAYSPERPIXEL && j < 308 / RAYSPERPIXEL && y > 805) {
             // Don't draw the floor behind the minimap image
-            let current_dist = ms.buffer_floors[y]; // Use a buffer since they're always the same values
-            let weight = current_dist / corrected_distance;
-
-            let rhs = ms.player.pos * (1.0 - weight);
-            let current_floor_x = weight * intersection.point[0] + rhs.x;
-            let current_floor_y = weight * intersection.point[1] + rhs.y;
-
-            let location = unsafe {
-                current_floor_x.to_int_unchecked::<usize>()
-                    + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0
-            }; //Cant be negative
-            let floor_type = ms.map.floors[location];
-            let ftx = unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
-            let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
-            let lighting = ms
-                .lighting_1
-                .get_lighting_floor(ftx as f32, fty as f32, location);
-            ms.screen.draw_texture(
-                slice,
-                [ftx, (floor_type * 128) + fty],
+            draw_floor(
                 y,
-                ms.torch.intensity * lighting,
-                ffmin(3.0 / (current_dist * current_dist), 1.5),
-            )
+                floor_height,
+                ms,
+                slice,
+                &intersection,
+                corrected_distance,
+                None,
+            );
         }
     }
     //draw ceiling
-    let rect_top_draw = rect_ceiling.min(h-pos_z);
+    let rect_top_draw = rect_ceiling.min(h - pos_z);
 
     for y in 0..(rect_top_draw + pos_z) as usize {
-        let current_dist = ms.buffer_floors[y];
-        let weight = current_dist / corrected_distance;
-
-        let rhs = ms.player.pos * (1.0 - weight);
-        let current_floor_x = weight * intersection.point[0] + rhs.x;
-        let current_floor_y = weight * intersection.point[1] + rhs.y;
-
-        let location = unsafe {
-            current_floor_x.to_int_unchecked::<usize>()
-                + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0
-        };
-
-        let ftx = unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 };
-        let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 };
-
-        ms.screen.draw_texture(
-            slice,
-            [ftx, 1152 + fty],
+        draw_floor(
             y,
-            ms.torch.intensity
-                * ms.lighting_1.get_lighting_floor(
-                    ftx as f32,
-                    fty as f32,
-                    location + ms.map_size.0 * ms.map_size.1,
-                ),
-            ffmin(3.0 / (current_dist * current_dist), 1.5),
+            ceiling_height,
+            ms,
+            slice,
+            &intersection,
+            corrected_distance,
+            Some(Type::TiledCeiling as usize),
         );
         //ms.screen.draw_pixel(slice, y as usize, &[0, 0, 0, 0]);
     }
@@ -380,6 +356,7 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                 Orientation::E,
                                 12,
                                 false,
+                                false,
                             );
                             if tw2.point[1] > tw.point[1] - 5.0 && tw2.point[1] < tw.point[1] + 5.0
                             {
@@ -422,36 +399,21 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                             .min(h)
                                             as usize
                                     {
-                                        let current_dist = (ms.player.planedist
-                                            * (1.0 - (i as f32) / 4.0)
-                                            + 2.0 * (ms.player.jump))
-                                            / (2.0 * (-ms.player.pitch + y as f32) - (h));
-                                        let weight = current_dist / corrected_distance;
-
-                                        let rhs = ms.player.pos * (1.0 - weight);
-                                        let current_floor_x =
-                                            weight * intersection.point[0] + rhs.x;
-                                        let current_floor_y =
-                                            weight * intersection.point[1] + rhs.y;
-
-                                        let ftx = (current_floor_x * ms.cell_size) as usize % 128;
-                                        let fty = (current_floor_y * ms.cell_size) as usize % 128;
-                                        /*let lighting = ms.lighting.get_lighting_floor(
-                                            ftx as f32 / 128.0,
-                                            fty as f32 / 128.0,
-                                            location,
-                                        );*/
-                                        ms.screen.draw_texture(
-                                            slice,
-                                            [ftx, (0 * 128) + fty],
+                                        draw_floor(
                                             y,
-                                            0.05,
-                                            (3.0 / (current_dist * current_dist)).min(1.5),
-                                        )
+                                            ms.player.planedist * (1.0 - (i as f32) / 4.0)
+                                                + 2.0 * ms.player.jump,
+                                            ms,
+                                            slice,
+                                            &intersection,
+                                            corrected_distance,
+                                            Some(Type::TiledFloor as usize),
+                                        );
                                     }
+                                
                                 } else if ms.player.planedist * (1.0 - (i as f32) / 4.0)
-                                    > -2.0 * (ms.player.jump)
-                                {
+                                    > -2.0 * (ms.player.jump){
+                                
                                     for y in (pos_z + h * 0.5 + rect_h * (4.0 - i as f32) / 8.0)
                                         as usize
                                         ..(ms.player.pitch
@@ -466,35 +428,20 @@ pub fn draw_slice(ms: &MainState, slice: &mut [u8], j: usize, h: f32) {
                                             .min(h)
                                             as usize
                                     {
-                                        let current_dist = (ms.player.planedist
-                                            * (1.0 - (i as f32) / 4.0)
-                                            + 2.0 * (ms.player.jump))
-                                            / (2.0 * (-ms.player.pitch + y as f32) - h); // Use a buffer since they're always the same values
-                                        let weight = current_dist / corrected_distance;
-
-                                        let rhs = ms.player.pos * (1.0 - weight);
-                                        let current_floor_x =
-                                            weight * intersection.point[0] + rhs.x;
-                                        let current_floor_y =
-                                            weight * intersection.point[1] + rhs.y;
-
-                                        let ftx = (current_floor_x * ms.cell_size) as usize % 128;
-                                        let fty = (current_floor_y * ms.cell_size) as usize % 128;
-                                        /*let lighting = ms.lighting.get_lighting_floor(
-                                            ftx as f32 / 128.0,
-                                            fty as f32 / 128.0,
-                                            location,
-                                        );*/
-                                        ms.screen.draw_texture(
-                                            slice,
-                                            [ftx, (0 * 128) + fty],
+                                        draw_floor(
                                             y,
-                                            0.05,
-                                            ffmin(3.0 / (current_dist * current_dist), 1.5),
-                                        )
+                                            ms.player.planedist * (1.0 - (i as f32) / 4.0)
+                                                + 2.0 * ms.player.jump,
+                                            ms,
+                                            slice,
+                                            &intersection,
+                                            corrected_distance,
+                                            Some(Type::TiledFloor as usize),
+                                        );
                                     }
                                 }
                             }
+                            
                         }
                         draw_wall(
                             ms,
@@ -534,9 +481,10 @@ fn draw_wall(
             (ms.cell_size) / (height)
         }
     };
+
     let up = center < h * 0.5 - 1.0;
 
-    let z = if up{ ms.map_size.0 * ms.map_size.1 } else { 0 };
+    let z = if up { ms.map_size.0 * ms.map_size.1 } else { 0 };
 
     let inter_x = intersection.point[0].fract();
     let inter_y = intersection.point[1].fract();
@@ -581,7 +529,7 @@ fn draw_wall(
             - ms.map
                 .doors
                 .get(&intersection.map_checkv)
-                .expect("error to draw door")
+                .expect("error drawing door")
                 .offset;
         match intersection.orientation {
             Orientation::N => {
@@ -615,11 +563,11 @@ fn draw_wall(
         }
     }
     let mut wall_type = intersection.wall_type;
-    if wall_type == 8 && up {
+    if wall_type == 8 && up && !intersection.is_up {
         wall_type = 4;
     }
 
-    for y in (pos_z + rect_top) as usize..(pos_z + rect_bottom_draw) as usize {
+    for y in  (pos_z + rect_top) as usize..(pos_z + rect_bottom_draw) as usize{
         //TODO: FIX THIS FLOAT POINT ROUNDING ERROR
         if ty >= 128.0 {
             dbg!(
@@ -663,6 +611,49 @@ fn draw_wall(
     }
 }
 
+#[inline(always)]
+fn draw_floor(
+    y: usize,
+    height: f32,
+    ms: &MainState,
+    slice: &mut [u8],
+    intersection: &Intersection,
+    corrected_distance: f32,
+    texture: Option<usize>,
+) {
+    let denominator = ms.buffer_floors[y]; // Use a buffer since they're always the same values
+    let current_dist = height * denominator;
+    let weight = current_dist / corrected_distance;
+
+    let rhs = ms.player.pos * (1.0 - weight);
+
+    let current_floor_x = weight * intersection.point[0] + rhs.x;
+    let current_floor_y = weight * intersection.point[1] + rhs.y;
+
+    let location = unsafe {
+        current_floor_x.to_int_unchecked::<usize>()
+            + current_floor_y.to_int_unchecked::<usize>() * ms.map_size.0
+    }; //Cant be negative
+    let floor_type = if let Some(tex) = texture {
+        tex
+    } else {
+        ms.map.floors[location]
+    };
+
+    let ftx = unsafe { (current_floor_x * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
+    let fty = unsafe { (current_floor_y * 128.0).to_int_unchecked::<usize>() % 128 }; //Cant be negative
+    let lighting = ms
+        .lighting_1
+        .get_lighting_floor(ftx as f32, fty as f32, location);
+    ms.screen.draw_texture(
+        slice,
+        [ftx, (floor_type * 128) + fty],
+        y,
+        ms.torch.intensity * lighting,
+        ffmin(3.0 / (current_dist * current_dist), 1.5),
+    )
+}
+
 pub struct Intersection {
     point: [f32; 2],
     distance: f32,
@@ -670,6 +661,7 @@ pub struct Intersection {
     orientation: Orientation,
     wall_type: usize,
     is_transparent: bool,
+    is_up: bool,
 }
 
 impl Intersection {
@@ -680,6 +672,7 @@ impl Intersection {
         orientation: Orientation,
         wall_type: usize,
         is_transparent: bool,
+        is_up: bool,
     ) -> Self {
         Self {
             point,
@@ -688,6 +681,7 @@ impl Intersection {
             orientation,
             wall_type,
             is_transparent,
+            is_up,
         }
     }
 }
